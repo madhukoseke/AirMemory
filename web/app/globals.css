@@ -1,0 +1,88 @@
+@import "@xyflow/react/dist/style.css";
+@import "../styles/tokens.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--bg);
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  color: var(--text);
+  background:
+    linear-gradient(rgba(74, 222, 128, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(74, 222, 128, 0.025) 1px, transparent 1px),
+    var(--bg);
+  background-size: 28px 28px;
+  font-family: var(--font-mono), "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  letter-spacing: 0;
+}
+
+body::before {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  pointer-events: none;
+  content: "";
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.025),
+    rgba(255, 255, 255, 0.025) 1px,
+    transparent 1px,
+    transparent 4px
+  );
+  opacity: 0.24;
+  mix-blend-mode: overlay;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 1px dashed var(--accent);
+  outline-offset: 3px;
+}
+
+.react-flow {
+  background: transparent;
+}
+
+.react-flow__node {
+  border: 1px dashed var(--border);
+  border-radius: 4px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 11px;
+}
+
+.react-flow__edge-path {
+  stroke: var(--border);
+  stroke-width: 1.4;
+}
+
+.react-flow__edge.active .react-flow__edge-path {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.react-flow__attribution {
+  display: none;
+}
+
+.overflow-wrap-anywhere {
+  overflow-wrap: anywhere;
+}

@@ -1,0 +1,106 @@
+{
+  "before": {
+    "recall_at_1": 0.0,
+    "recall_at_3": 1.0,
+    "preferred_fix_first_rate": 0.0
+  },
+  "after": {
+    "recall_at_1": 1.0,
+    "recall_at_3": 1.0,
+    "preferred_fix_first_rate": 1.0
+  },
+  "forget_leakage": 0,
+  "rows": [
+    {
+      "pass": "cold",
+      "query": "validate_row_counts failed on customer_master with ROW_COUNT_MISMATCH",
+      "incident_id": "INC-1029",
+      "expected_resolution": "res-window-3-day",
+      "actual_rank": 2,
+      "in_top_1": false,
+      "in_top_3": true
+    },
+    {
+      "pass": "cold",
+      "query": "publish_metrics has bad customer_metrics numbers in Looker",
+      "incident_id": "INC-1029",
+      "expected_resolution": "res-window-3-day",
+      "actual_rank": 2,
+      "in_top_1": false,
+      "in_top_3": true
+    },
+    {
+      "pass": "cold",
+      "query": "HANA source count is higher than BigQuery customer_master count",
+      "incident_id": "INC-1029",
+      "expected_resolution": "res-window-3-day",
+      "actual_rank": 2,
+      "in_top_1": false,
+      "in_top_3": true
+    },
+    {
+      "pass": "cold",
+      "query": "Can we safely rerun customer_daily_migration_dag after a count diff?",
+      "incident_id": "INC-1029",
+      "expected_resolution": "res-window-3-day",
+      "actual_rank": 2,
+      "in_top_1": false,
+      "in_top_3": true
+    },
+    {
+      "pass": "cold",
+      "query": "Which fix should we use for late arriving processing_date records?",
+      "incident_id": "INC-1029",
+      "expected_resolution": "res-window-3-day",
+      "actual_rank": 2,
+      "in_top_1": false,
+      "in_top_3": true
+    },
+    {
+      "pass": "improved",
+      "query": "validate_row_counts failed on customer_master with ROW_COUNT_MISMATCH",
+      "incident_id": "INC-1029",
+      "expected_resolution": "res-window-3-day",
+      "actual_rank": 1,
+      "in_top_1": true,
+      "in_top_3": true
+    },
+    {
+      "pass": "improved",
+      "query": "publish_metrics has bad customer_metrics numbers in Looker",
+      "incident_id": "INC-1029",
+      "expected_resolution": "res-window-3-day",
+      "actual_rank": 1,
+      "in_top_1": true,
+      "in_top_3": true
+    },
+    {
+      "pass": "improved",
+      "query": "HANA source count is higher than BigQuery customer_master count",
+      "incident_id": "INC-1029",
+      "expected_resolution": "res-window-3-day",
+      "actual_rank": 1,
+      "in_top_1": true,
+      "in_top_3": true
+    },
+    {
+      "pass": "improved",
+      "query": "Can we safely rerun customer_daily_migration_dag after a count diff?",
+      "incident_id": "INC-1029",
+      "expected_resolution": "res-window-3-day",
+      "actual_rank": 1,
+      "in_top_1": true,
+      "in_top_3": true
+    },
+    {
+      "pass": "improved",
+      "query": "Which fix should we use for late arriving processing_date records?",
+      "incident_id": "INC-1029",
+      "expected_resolution": "res-window-3-day",
+      "actual_rank": 1,
+      "in_top_1": true,
+      "in_top_3": true
+    }
+  ],
+  "results_path": "eval/results.json"
+}

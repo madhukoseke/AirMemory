@@ -1,0 +1,5 @@
+2026-06-30T03:14:08Z ERROR dag_id=customer_daily_migration_dag task_id=validate_row_counts
+2026-06-30T03:14:08Z ERROR error_type=ROW_COUNT_MISMATCH source_table=hana.customer_master target_table=bq.prod.customer_master
+2026-06-30T03:14:08Z ERROR source_count=1588 target_count=1297 diff=291 processing_date=2026-06-30
+2026-06-30T03:15:11Z INFO downstream task publish_metrics remains blocked because dq_reconciliation_check did not run
+

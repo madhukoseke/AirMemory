@@ -1,0 +1,26 @@
+{
+  "title": "INC-1029 Slack triage: customer row-count mismatch",
+  "messages": [
+    {
+      "user": "alice@acme.com",
+      "ts": "2026-06-20T03:20:00Z",
+      "text": "customer_daily_migration_dag failed at validate_row_counts. Source 1588, target 1297."
+    },
+    {
+      "user": "bob@acme.com",
+      "ts": "2026-06-20T03:25:00Z",
+      "text": "Check processing_date. Late-arriving records often land with offset dates, so exact-date validation is unsafe."
+    },
+    {
+      "user": "lead@acme.com",
+      "ts": "2026-06-20T03:33:00Z",
+      "text": "Use the plus/minus 3 day processing_date window. Rerun validate_row_counts and dq_reconciliation_check only."
+    },
+    {
+      "user": "lead@acme.com",
+      "ts": "2026-06-20T03:34:00Z",
+      "text": "Do not clear the full DAG. Downstream tables are incremental and full reruns duplicate published metrics."
+    }
+  ]
+}
+

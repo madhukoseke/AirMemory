@@ -1,0 +1,39 @@
+[
+  {
+    "number": 42011,
+    "title": "Scheduler heartbeat gaps cause queued tasks to appear stuck",
+    "author": "airflow-user",
+    "created_at": "2026-05-18T13:20:00Z",
+    "updated_at": "2026-05-19T09:45:00Z",
+    "status": "resolved",
+    "tags": ["scheduler", "heartbeat", "executor"],
+    "url": "https://github.com/apache/airflow/issues/42011",
+    "body": "Tasks remain queued while the scheduler log shows intermittent heartbeat gaps and database pool saturation.",
+    "resolution": "Maintainers recommended checking scheduler heartbeat duration, database pool sizing, and executor queue pressure before clearing task instances."
+  },
+  {
+    "number": 41877,
+    "title": "Zombie task cleanup races with long BigQuery operator retries",
+    "author": "data-eng",
+    "created_at": "2026-04-30T18:10:00Z",
+    "updated_at": "2026-05-01T12:05:00Z",
+    "status": "resolved",
+    "tags": ["bigquery", "zombie-task", "retry"],
+    "url": "https://github.com/apache/airflow/issues/41877",
+    "body": "Long-running BigQuery tasks are marked as zombie when scheduler heartbeat delays coincide with retries.",
+    "resolution": "The thread points to tuning zombie detection thresholds and confirming executor heartbeat health rather than repeatedly clearing the DAG."
+  },
+  {
+    "number": 41702,
+    "title": "Dataset scheduling emits duplicate downstream refresh after manual retry",
+    "author": "analytics-platform",
+    "created_at": "2026-04-12T07:25:00Z",
+    "updated_at": "2026-04-13T10:02:00Z",
+    "status": "resolved",
+    "tags": ["datasets", "scheduling", "retry"],
+    "url": "https://github.com/apache/airflow/issues/41702",
+    "body": "Manual retry of a producer DAG emitted duplicate dataset events and caused downstream refreshes to run twice.",
+    "resolution": "Maintainers recommended narrowing rerun scope and checking dataset event deduplication instead of clearing producer and consumer DAGs together."
+  }
+]
+

@@ -1,0 +1,23 @@
+[
+  {
+    "query": "validate_row_counts failed on customer_master with ROW_COUNT_MISMATCH",
+    "expected_resolution": "res-window-3-day"
+  },
+  {
+    "query": "publish_metrics has bad customer_metrics numbers in Looker",
+    "expected_resolution": "res-window-3-day"
+  },
+  {
+    "query": "HANA source count is higher than BigQuery customer_master count",
+    "expected_resolution": "res-window-3-day"
+  },
+  {
+    "query": "Can we safely rerun customer_daily_migration_dag after a count diff?",
+    "expected_resolution": "res-window-3-day"
+  },
+  {
+    "query": "Which fix should we use for late arriving processing_date records?",
+    "expected_resolution": "res-window-3-day"
+  }
+]
+
