@@ -1,0 +1,43 @@
+{
+  "missing_partition_runbook": {
+    "failure_category": "missing_partition",
+    "when_to_use": "Use when an Airflow task fails because a required source partition is missing.",
+    "diagnosis_steps": [
+      "Check whether the expected source partition exists.",
+      "Verify upstream load completion markers and freshness.",
+      "Confirm downstream task has not already partially written target data."
+    ],
+    "fix_steps": [
+      "Trigger or request the upstream backfill for the missing partition.",
+      "Rerun from the failed transform task after the partition is available.",
+      "Validate target row counts and dashboard freshness."
+    ],
+    "prevention": "Add a source partition availability sensor before the transform task."
+  },
+  "row_count_mismatch_runbook": {
+    "failure_category": "row_count_mismatch",
+    "when_to_use": "Use when source and target row counts diverge after a data load.",
+    "diagnosis_steps": [
+      "Compare source and target counts for the same processing window.",
+      "Check for late source records and partial downstream writes."
+    ],
+    "fix_steps": [
+      "Wait for source completion marker.",
+      "Rerun validation after source load finalization."
+    ],
+    "prevention": "Gate validation on upstream completion markers."
+  },
+  "schema_drift_runbook": {
+    "failure_category": "schema_drift",
+    "when_to_use": "Use when source data columns are missing, added, or change type.",
+    "diagnosis_steps": [
+      "Compare incoming schema with the documented contract.",
+      "Contact the source owner for change intent and rollout timing."
+    ],
+    "fix_steps": [
+      "Update schema mapping if the change is approved.",
+      "Reject or quarantine incompatible files until the contract is updated."
+    ],
+    "prevention": "Run schema contract checks before loading data."
+  }
+}

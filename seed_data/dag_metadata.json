@@ -1,0 +1,77 @@
+{
+  "customer_daily_revenue_dag": {
+    "owner": "revenue-data-team",
+    "schedule": "0 5 * * *",
+    "criticality": "high",
+    "business_impact": "Delays customer revenue dashboard and daily executive revenue reporting.",
+    "tasks": [
+      "extract_transactions",
+      "transform_revenue",
+      "validate_revenue",
+      "publish_revenue"
+    ],
+    "source_tables": ["raw.customer_transactions", "raw.customer_profiles"],
+    "target_tables": ["mart.customer_daily_revenue"],
+    "downstream_assets": ["dashboard.customer_revenue_daily", "report.executive_revenue_summary"]
+  },
+  "payment_settlement_dag": {
+    "owner": "payments-data-team",
+    "schedule": "0 6 * * *",
+    "criticality": "high",
+    "business_impact": "Delays payment settlement reconciliation and merchant payout readiness.",
+    "tasks": [
+      "extract_settlement",
+      "transform_settlement",
+      "validate_settlement_count",
+      "publish_settlement"
+    ],
+    "source_tables": ["raw.payment_settlement"],
+    "target_tables": ["mart.payment_settlement_fact"],
+    "downstream_assets": ["dashboard.payment_settlement_health"]
+  },
+  "merchant_payout_dag": {
+    "owner": "merchant-data-team",
+    "schedule": "30 6 * * *",
+    "criticality": "high",
+    "business_impact": "Delays merchant payout reporting.",
+    "tasks": [
+      "connect_to_bank_sftp",
+      "load_payout_file",
+      "validate_payout",
+      "publish_payout"
+    ],
+    "source_tables": ["raw.merchant_payout_file"],
+    "target_tables": ["mart.merchant_payout"],
+    "downstream_assets": ["report.merchant_payout_daily"]
+  },
+  "settlement_recon_dag": {
+    "owner": "payments-data-team",
+    "schedule": "15 6 * * *",
+    "criticality": "medium",
+    "business_impact": "Delays settlement reconciliation exception reporting.",
+    "tasks": ["extract_settlement_file", "dedupe_settlement_records", "publish_recon"],
+    "source_tables": ["raw.settlement_file"],
+    "target_tables": ["mart.settlement_recon"],
+    "downstream_assets": ["dashboard.settlement_recon"]
+  },
+  "customer_profile_dag": {
+    "owner": "customer-data-team",
+    "schedule": "0 4 * * *",
+    "criticality": "medium",
+    "business_impact": "Delays customer profile mart refresh and personalization features.",
+    "tasks": ["extract_profile", "validate_required_fields", "publish_profile"],
+    "source_tables": ["raw.customer_profile"],
+    "target_tables": ["mart.customer_profile"],
+    "downstream_assets": ["feature_store.customer_profile"]
+  },
+  "external_revenue_api_dag": {
+    "owner": "revenue-integrations-team",
+    "schedule": "0 * * * *",
+    "criticality": "medium",
+    "business_impact": "Delays external revenue reconciliation inputs.",
+    "tasks": ["fetch_api_payload", "validate_api_payload", "publish_api_payload"],
+    "source_tables": ["api.external_revenue"],
+    "target_tables": ["raw.external_revenue_payload"],
+    "downstream_assets": ["mart.external_revenue_recon"]
+  }
+}

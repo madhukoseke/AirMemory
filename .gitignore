@@ -6,6 +6,7 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.airmemory_state/
 
 web/node_modules/
 web/.next/
@@ -14,4 +15,3 @@ web/.env.local
 
 dist/
 build/
-

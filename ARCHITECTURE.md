@@ -1,5 +1,28 @@
 # Architecture
 
+## Event Memory Runtime
+
+```text
+Airflow callback or demo emitter
+        |
+        v
+Redis Stream or local JSONL queue
+        |
+        v
+AirMemory worker
+  normalize -> categorize -> fingerprint -> deterministic similarity
+        |
+        v
+Cognee recall wrapper -> advice generation -> Markdown wiki
+        |
+        v
+Cognee remember wrapper + dashboard state
+```
+
+The runtime is local-first. If Redis or Cognee is not configured, the queue and memory wrappers fall back to `.airmemory_state/` so the demo and tests still exercise the full flow.
+
+## FastAPI / Next Instrument Panel
+
 ```text
 Airflow artifacts
   DAG code, logs, incidents, runbooks, SQL, Slack, GitHub issues
@@ -62,5 +85,7 @@ This is the graph reasoning contrast: vector-only recall has no direct downstrea
 
 ## Storage Modes
 
-- Development: Cognee embedded defaults, with the deterministic local mirror always available for no-key local runs and tests.
-- Production-like local storage: Postgres via `docker-compose.yml`, configured with Cognee `DB_PROVIDER=postgres`, `VECTOR_DB_PROVIDER=pgvector`, `GRAPH_DATABASE_PROVIDER=postgres`, and `CACHE_BACKEND=postgres`.
+- Development: local JSONL queue, deterministic similarity, fake LLM advice, and local Cognee markdown fallback.
+- Redis-backed local: Redis Streams for event ingestion and dashboard state.
+- Cognee-backed local: Cognee remember/recall wrappers when the package and credentials are configured.
+- Postgres-backed Cognee storage: Postgres via `docker-compose.yml`, configured with Cognee `DB_PROVIDER=postgres`, `VECTOR_DB_PROVIDER=pgvector`, `GRAPH_DATABASE_PROVIDER=postgres`, and `CACHE_BACKEND=postgres`.

@@ -1,0 +1,164 @@
+[
+  {
+    "incident_id": "inc_2026_06_12_customer_revenue_missing_partition",
+    "date": "2026-06-12",
+    "dag_id": "customer_daily_revenue_dag",
+    "task_id": "transform_revenue",
+    "failure_category": "missing_partition",
+    "error_message": "BigQuery error: partition 2026-06-12 not found in raw.customer_transactions",
+    "normalized_error": "partition not found in raw.customer_transactions",
+    "failure_fingerprint": "missing_partition|customer_daily_revenue_dag|transform_revenue|raw.customer_transactions",
+    "root_cause": "The upstream raw.customer_transactions partition was delayed and was not available when the DAG started.",
+    "accepted_fix": "Backfill the missing raw.customer_transactions partition and rerun the DAG from transform_revenue.",
+    "rejected_fixes": [
+      "Increasing retries without checking whether the upstream partition exists",
+      "Skipping the partition validation step"
+    ],
+    "prevention": "Add an upstream partition sensor before transform_revenue.",
+    "owner": "revenue-data-team",
+    "source_tables": ["raw.customer_transactions"],
+    "target_tables": ["mart.customer_daily_revenue"],
+    "related_runbook": "missing_partition_runbook"
+  },
+  {
+    "incident_id": "inc_2026_05_29_payment_settlement_row_count_mismatch",
+    "date": "2026-05-29",
+    "dag_id": "payment_settlement_dag",
+    "task_id": "validate_settlement_count",
+    "failure_category": "row_count_mismatch",
+    "error_message": "Row count mismatch: source count 120034, target count 119981",
+    "normalized_error": "row count mismatch between source and target",
+    "failure_fingerprint": "row_count_mismatch|payment_settlement_dag|validate_settlement_count|raw.payment_settlement",
+    "root_cause": "Late-arriving source records landed after the initial transformation completed.",
+    "accepted_fix": "Wait for source completion marker and rerun validation after upstream load completes.",
+    "rejected_fixes": [
+      "Lowering the validation threshold",
+      "Ignoring the mismatch because the difference looked small"
+    ],
+    "prevention": "Use a completion marker sensor and compare counts after source load finalization.",
+    "owner": "payments-data-team",
+    "source_tables": ["raw.payment_settlement"],
+    "target_tables": ["mart.payment_settlement_fact"],
+    "related_runbook": "row_count_mismatch_runbook"
+  },
+  {
+    "incident_id": "inc_2026_05_03_merchant_payout_schema_drift",
+    "date": "2026-05-03",
+    "dag_id": "merchant_payout_dag",
+    "task_id": "load_payout_file",
+    "failure_category": "schema_drift",
+    "error_message": "Column payout_status expected STRING but received INT64",
+    "normalized_error": "column type changed in source file",
+    "failure_fingerprint": "schema_drift|merchant_payout_dag|load_payout_file|raw.merchant_payout_file",
+    "root_cause": "Source system changed payout_status type without notifying downstream consumers.",
+    "accepted_fix": "Update schema mapping and add a contract validation check before loading.",
+    "rejected_fixes": [
+      "Casting all columns to STRING without preserving business types"
+    ],
+    "prevention": "Add schema contract checks and alert the source owner before processing.",
+    "owner": "merchant-data-team",
+    "source_tables": ["raw.merchant_payout_file"],
+    "target_tables": ["mart.merchant_payout"],
+    "related_runbook": "schema_drift_runbook"
+  },
+  {
+    "incident_id": "inc_2026_04_21_customer_revenue_late_source",
+    "date": "2026-04-21",
+    "dag_id": "customer_daily_revenue_dag",
+    "task_id": "extract_transactions",
+    "failure_category": "late_source_data",
+    "error_message": "Source table raw.customer_transactions was not updated within SLA window",
+    "normalized_error": "source table freshness check failed",
+    "failure_fingerprint": "late_source_data|customer_daily_revenue_dag|extract_transactions|raw.customer_transactions",
+    "root_cause": "Upstream CDC job finished 48 minutes later than expected.",
+    "accepted_fix": "Wait for CDC completion and rerun extract_transactions.",
+    "rejected_fixes": [
+      "Manually inserting placeholder rows"
+    ],
+    "prevention": "Add source freshness sensor and route alert to upstream owner.",
+    "owner": "revenue-data-team",
+    "source_tables": ["raw.customer_transactions"],
+    "target_tables": ["stg.customer_transactions"],
+    "related_runbook": "late_source_data_runbook"
+  },
+  {
+    "incident_id": "inc_2026_04_10_settlement_duplicate_records",
+    "date": "2026-04-10",
+    "dag_id": "settlement_recon_dag",
+    "task_id": "dedupe_settlement_records",
+    "failure_category": "duplicate_records",
+    "error_message": "Duplicate key detected for settlement_id and processing_date",
+    "normalized_error": "duplicate business key detected",
+    "failure_fingerprint": "duplicate_records|settlement_recon_dag|dedupe_settlement_records|raw.settlement_file",
+    "root_cause": "Upstream file was replayed twice due to retry behavior.",
+    "accepted_fix": "Deduplicate by settlement_id, processing_date, and source_file_sequence.",
+    "rejected_fixes": [
+      "Dropping all duplicate records without sequence-based tie-breaker"
+    ],
+    "prevention": "Add idempotency check using source file manifest.",
+    "owner": "payments-data-team",
+    "source_tables": ["raw.settlement_file"],
+    "target_tables": ["mart.settlement_recon"],
+    "related_runbook": "duplicate_records_runbook"
+  },
+  {
+    "incident_id": "inc_2026_03_28_customer_profile_null_explosion",
+    "date": "2026-03-28",
+    "dag_id": "customer_profile_dag",
+    "task_id": "validate_required_fields",
+    "failure_category": "null_value_spike",
+    "error_message": "Required field email_address null rate increased from 0.2% to 36%",
+    "normalized_error": "null value spike in required field",
+    "failure_fingerprint": "null_value_spike|customer_profile_dag|validate_required_fields|raw.customer_profile",
+    "root_cause": "A source mapping change stopped populating email_address.",
+    "accepted_fix": "Rollback source mapping and rerun profile load.",
+    "rejected_fixes": [
+      "Relaxing the null threshold without source owner approval"
+    ],
+    "prevention": "Add field-level anomaly alert and source contract check.",
+    "owner": "customer-data-team",
+    "source_tables": ["raw.customer_profile"],
+    "target_tables": ["mart.customer_profile"],
+    "related_runbook": "null_value_spike_runbook"
+  },
+  {
+    "incident_id": "inc_2026_03_10_revenue_api_timeout",
+    "date": "2026-03-10",
+    "dag_id": "external_revenue_api_dag",
+    "task_id": "fetch_api_payload",
+    "failure_category": "api_timeout",
+    "error_message": "API request timed out after 300 seconds",
+    "normalized_error": "external api timeout",
+    "failure_fingerprint": "api_timeout|external_revenue_api_dag|fetch_api_payload|api.external_revenue",
+    "root_cause": "External API latency increased during provider maintenance.",
+    "accepted_fix": "Retry after provider maintenance window and add exponential backoff.",
+    "rejected_fixes": [
+      "Reducing payload size without confirming provider status"
+    ],
+    "prevention": "Add provider status check and exponential backoff.",
+    "owner": "revenue-integrations-team",
+    "source_tables": ["api.external_revenue"],
+    "target_tables": ["raw.external_revenue_payload"],
+    "related_runbook": "api_timeout_runbook"
+  },
+  {
+    "incident_id": "inc_2026_02_18_payout_credentials_expired",
+    "date": "2026-02-18",
+    "dag_id": "merchant_payout_dag",
+    "task_id": "connect_to_bank_sftp",
+    "failure_category": "credential_expired",
+    "error_message": "SFTP authentication failed: key expired",
+    "normalized_error": "credential expired for external connection",
+    "failure_fingerprint": "credential_expired|merchant_payout_dag|connect_to_bank_sftp|sftp.bank_payout_file",
+    "root_cause": "SFTP key rotation reminder was missed.",
+    "accepted_fix": "Rotate key, update secret, and rerun from connect_to_bank_sftp.",
+    "rejected_fixes": [
+      "Disabling SFTP validation"
+    ],
+    "prevention": "Add credential expiration monitoring and 14-day rotation alert.",
+    "owner": "merchant-data-team",
+    "source_tables": ["sftp.bank_payout_file"],
+    "target_tables": ["raw.merchant_payout_file"],
+    "related_runbook": "credential_expired_runbook"
+  }
+]
