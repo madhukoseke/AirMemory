@@ -1,17 +1,32 @@
 {
   "raw.customer_transactions": {
     "downstream_tables": ["stg.customer_transactions", "mart.customer_daily_revenue"],
-    "downstream_dags": ["customer_daily_revenue_dag"]
+    "downstream_dags": ["customer_daily_revenue_dag"],
+    "upstream_tables": []
   },
   "mart.customer_daily_revenue": {
-    "downstream_assets": ["dashboard.customer_revenue_daily", "report.executive_revenue_summary"]
+    "downstream_assets": ["dashboard.customer_revenue_daily", "report.executive_revenue_summary"],
+    "upstream_tables": ["raw.customer_transactions"]
   },
   "raw.payment_settlement": {
     "downstream_tables": ["mart.payment_settlement_fact"],
-    "downstream_dags": ["payment_settlement_dag"]
+    "downstream_dags": ["payment_settlement_dag"],
+    "upstream_tables": []
   },
   "raw.merchant_payout_file": {
     "downstream_tables": ["mart.merchant_payout"],
-    "downstream_dags": ["merchant_payout_dag"]
+    "downstream_dags": ["merchant_payout_dag"],
+    "upstream_tables": []
+  },
+  "bq.prod.customer_metrics": {
+    "upstream_tables": ["bq.prod.customer_master"],
+    "downstream_assets": ["looker.customer_metrics"]
+  },
+  "bq.prod.customer_master": {
+    "upstream_tables": ["hana.customer_master"]
+  },
+  "hana.customer_master": {
+    "upstream_tables": [],
+    "related_incidents": ["INC-1029"]
   }
 }

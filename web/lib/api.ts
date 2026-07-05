@@ -160,3 +160,66 @@ export function runEval() {
 export function getGraph() {
   return apiRequest<GraphPath>('/graph')
 }
+
+export type RuntimeSummary = {
+  queue_mode: string
+  wiki_dir: string
+  state_dir: string
+  incident_count: number
+  latest_incident_id?: string | null
+  latest_summary?: string | null
+}
+
+export type RuntimeIncidentResult = {
+  incident: {
+    incident_id: string
+    dag_id: string
+    task_id: string
+    failure_category: string
+    raw_error: string
+    recommended_fix?: string | null
+    likely_root_cause?: string | null
+    rejected_fix_warning?: string | null
+  }
+  advice: {
+    summary: string
+    likely_root_cause: string
+    recommended_fix: string
+    rejected_fix_warning?: string | null
+    confidence: number
+    recommended_next_steps: string[]
+  }
+  similar_incidents: Array<{
+    incident_id: string
+    similarity_score: number
+    reason: string
+  }>
+  wiki_paths: string[]
+  cognee_recall_text?: string | null
+}
+
+export function getRuntimeSummary() {
+  return apiRequest<RuntimeSummary>('/runtime/summary')
+}
+
+export function listRuntimeIncidents() {
+  return apiRequest<{ incident_ids: string[] }>('/runtime/incidents')
+}
+
+export function getRuntimeIncident(incidentId: string) {
+  return apiRequest<RuntimeIncidentResult>(`/runtime/incidents/${incidentId}`)
+}
+
+export function emitRuntimeFailure() {
+  return apiRequest<{ message_id: string; dag_id: string; task_id: string; incident_id: string }>(
+    '/runtime/emit',
+    { method: 'POST', body: '{}' }
+  )
+}
+
+export function processRuntimeFailure() {
+  return apiRequest<{ processed: boolean; result: RuntimeIncidentResult | null; formatted: string }>(
+    '/runtime/process',
+    { method: 'POST', body: '{}' }
+  )
+}

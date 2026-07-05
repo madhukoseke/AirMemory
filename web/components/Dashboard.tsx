@@ -27,11 +27,16 @@ import {
 import type { ComponentType, ReactNode } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
+  emitRuntimeFailure,
   forgetDeprecated,
   generateRunbook,
   getGraph,
   getHealth,
+  getRuntimeIncident,
+  getRuntimeSummary,
   improveMemory,
+  listRuntimeIncidents,
+  processRuntimeFailure,
   recallMemory,
   runEval,
   seedAirMemory,
@@ -42,6 +47,8 @@ import {
   type ImproveResponse,
   type RecallResponse,
   type ResolutionRank,
+  type RuntimeIncidentResult,
+  type RuntimeSummary,
   type SeedResponse
 } from '@/lib/api'
 
@@ -71,7 +78,7 @@ const INCIDENT = {
   table: 'bq.prod.customer_master'
 }
 
-type ViewId = 'overview' | 'recall' | 'lineage' | 'improve' | 'forget' | 'evals' | 'settings'
+type ViewId = 'overview' | 'recall' | 'lineage' | 'runtime' | 'improve' | 'forget' | 'evals' | 'settings'
 
 type IconType = ComponentType<{ size?: number; className?: string }>
 
@@ -87,12 +94,13 @@ type RunbookState = {
   citations: Citation[]
 }
 
-type BusyAction = 'refresh' | 'recall' | 'lineage' | 'improve' | 'forget' | 'eval' | null
+type BusyAction = 'refresh' | 'recall' | 'lineage' | 'runtime' | 'improve' | 'forget' | 'eval' | null
 
 const NAV_ITEMS: NavItem[] = [
   { id: 'overview', label: 'Overview', description: 'Incident command', icon: LayoutDashboard },
   { id: 'recall', label: 'Recall', description: 'Answers and citations', icon: Brain },
   { id: 'lineage', label: 'Lineage', description: 'Graph path reasoning', icon: GitBranch },
+  { id: 'runtime', label: 'Runtime', description: 'Live worker incidents', icon: Zap },
   { id: 'improve', label: 'Improve', description: 'Feedback and ranks', icon: ThumbsUp },
   { id: 'forget', label: 'Forget', description: 'Governance controls', icon: Trash2 },
   { id: 'evals', label: 'Evals', description: 'Recall quality', icon: BarChart3 },
@@ -111,6 +119,10 @@ export function Dashboard() {
   const [improve, setImprove] = useState<ImproveResponse | null>(null)
   const [forget, setForget] = useState<ForgetResponse | null>(null)
   const [evalResult, setEvalResult] = useState<EvalResponse | null>(null)
+  const [runtimeSummary, setRuntimeSummary] = useState<RuntimeSummary | null>(null)
+  const [runtimeIncidents, setRuntimeIncidents] = useState<string[]>([])
+  const [runtimeDetail, setRuntimeDetail] = useState<RuntimeIncidentResult | null>(null)
+  const [runtimeFormatted, setRuntimeFormatted] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busyAction, setBusyAction] = useState<BusyAction>('refresh')
 
@@ -203,9 +215,28 @@ export function Dashboard() {
     [runAction]
   )
 
+  const loadRuntime = useCallback(async () => {
+    const [summary, incidents] = await Promise.all([getRuntimeSummary(), listRuntimeIncidents()])
+    setRuntimeSummary(summary)
+    setRuntimeIncidents(incidents.incident_ids)
+    if (incidents.incident_ids[0]) {
+      const detail = await getRuntimeIncident(incidents.incident_ids[0])
+      setRuntimeDetail(detail)
+    } else {
+      setRuntimeDetail(null)
+    }
+  }, [])
+
+  const refreshRuntime = useCallback(async () => {
+    await runAction('runtime', async () => {
+      await loadRuntime()
+    })
+  }, [loadRuntime, runAction])
+
   useEffect(() => {
     void refreshAll(DEFAULT_QUESTION)
-  }, [refreshAll])
+    void loadRuntime()
+  }, [refreshAll, loadRuntime])
 
   function switchView(view: ViewId) {
     setActiveView(view)
@@ -254,6 +285,26 @@ export function Dashboard() {
     void runAction('eval', async () => {
       const result = await runEval()
       setEvalResult(result)
+    })
+  }
+
+  function emitAndProcessRuntime() {
+    setActiveView('runtime')
+    void runAction('runtime', async () => {
+      await emitRuntimeFailure()
+      const processed = await processRuntimeFailure()
+      setRuntimeFormatted(processed.formatted)
+      if (processed.result) {
+        setRuntimeDetail(processed.result)
+      }
+      await refreshRuntime()
+    })
+  }
+
+  function loadRuntimeIncident(incidentId: string) {
+    void runAction('runtime', async () => {
+      const detail = await getRuntimeIncident(incidentId)
+      setRuntimeDetail(detail)
     })
   }
 
@@ -315,6 +366,19 @@ export function Dashboard() {
 
             {activeView === 'lineage' ? (
               <LineageView graph={graphForDisplay} recall={recall} onDownstream={askDownstream} isBusy={isBusy} />
+            ) : null}
+
+            {activeView === 'runtime' ? (
+              <RuntimeView
+                formatted={runtimeFormatted}
+                incidentIds={runtimeIncidents}
+                isBusy={isBusy}
+                runtimeDetail={runtimeDetail}
+                summary={runtimeSummary}
+                onEmitAndProcess={emitAndProcessRuntime}
+                onRefresh={refreshRuntime}
+                onSelectIncident={loadRuntimeIncident}
+              />
             ) : null}
 
             {activeView === 'improve' ? (
@@ -543,8 +607,8 @@ function OverviewView({
   topResolution?: ResolutionRank
 }) {
   return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(380px,0.95fr)]">
-      <div className="grid gap-4">
+    <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(380px,0.95fr)]">
+      <div className="grid min-w-0 gap-4">
         <Panel title="Current failure" icon={<Activity size={17} />} action={<StatusPill tone="danger">blocked</StatusPill>}>
           <MetricGrid>
             <Metric label="DAG" value={INCIDENT.dag} mono />
@@ -572,7 +636,7 @@ function OverviewView({
         </Panel>
       </div>
 
-      <div className="grid content-start gap-4">
+      <div className="grid min-w-0 content-start gap-4">
         <Panel title="Top resolution" icon={<CheckCircle2 size={17} />}>
           <ResolutionHighlight accepted={accepted} topResolution={topResolution} />
         </Panel>
@@ -608,8 +672,8 @@ function RecallView({
   recall: RecallResponse | null
 }) {
   return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
-      <div className="grid gap-4">
+    <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+      <div className="grid min-w-0 gap-4">
         <Panel title="Ask memory" icon={<Brain size={17} />}>
           <label className="block">
             <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-muted">Question</span>
@@ -652,14 +716,14 @@ function LineageView({
   recall: RecallResponse | null
 }) {
   return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+    <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
       <Panel title="Lineage graph" icon={<GitBranch size={17} />}>
         <LineageGraph graph={graph} />
         <PathSummary graph={graph} contrast={recall?.vector_only_contrast} />
         <ActionButton className="mt-4" title="Trace downstream symptom" icon={<GitBranch size={15} />} onClick={onDownstream} disabled={isBusy} />
       </Panel>
 
-      <div className="grid content-start gap-4">
+      <div className="grid min-w-0 content-start gap-4">
         <Panel title="Legend" icon={<Database size={17} />}>
           <Legend />
         </Panel>
@@ -685,7 +749,7 @@ function ImproveView({
   ranks: ResolutionRank[]
 }) {
   return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+    <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
       <Panel title="Feedback control" icon={<ThumbsUp size={17} />}>
         <MetricGrid>
           <Metric label="Incident" value={INCIDENT.id} mono />
@@ -700,7 +764,7 @@ function ImproveView({
         <ActionButton className="mt-4" title="Confirm fix and improve ranking" icon={<ThumbsUp size={15} />} onClick={onImprove} disabled={isBusy} />
       </Panel>
 
-      <div className="grid content-start gap-4">
+      <div className="grid min-w-0 content-start gap-4">
         <Panel title="Rank movement" icon={<Activity size={17} />}>
           <MetricGrid>
             <Metric label="Before" value={improve ? `#${improve.rank_before} / ${improve.score_before.toFixed(2)}` : 'not applied'} mono />
@@ -730,7 +794,7 @@ function ForgetView({
   ranks: ResolutionRank[]
 }) {
   return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+    <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
       <Panel title="Forget control" icon={<Trash2 size={17} />} action={<StatusPill tone={deprecatedVisible ? 'danger' : 'success'}>{deprecatedVisible ? 'visible' : 'clean'}</StatusPill>}>
         <MetricGrid>
           <Metric label="Target dataset" value="airmemory_deprecated_full_dag_clear" mono />
@@ -744,7 +808,7 @@ function ForgetView({
         <ActionButton className="mt-4" title="Remove deprecated workaround" icon={<Trash2 size={15} />} onClick={onForget} disabled={isBusy} tone="danger" />
       </Panel>
 
-      <div className="grid content-start gap-4">
+      <div className="grid min-w-0 content-start gap-4">
         <Panel title="Forget result" icon={<ShieldCheck size={17} />}>
           <p className="text-sm leading-6 text-muted">{forget?.message ?? 'No forget operation has been applied in this session.'}</p>
         </Panel>
@@ -758,7 +822,7 @@ function ForgetView({
 
 function EvalsView({ evalResult, isBusy, onEval }: { evalResult: EvalResponse | null; isBusy: boolean; onEval: () => void }) {
   return (
-    <div className="grid gap-4 xl:grid-cols-[420px_minmax(0,1fr)]">
+    <div className="grid min-w-0 gap-4 xl:grid-cols-[420px_minmax(0,1fr)]">
       <Panel title="Evaluation summary" icon={<BarChart3 size={17} />}>
         <MetricGrid>
           <Metric label="Cold recall @1" value={evalResult ? pct(evalResult.before.recall_at_1) : 'pending'} mono />
@@ -777,6 +841,93 @@ function EvalsView({ evalResult, isBusy, onEval }: { evalResult: EvalResponse | 
   )
 }
 
+function RuntimeView({
+  formatted,
+  incidentIds,
+  isBusy,
+  onEmitAndProcess,
+  onRefresh,
+  onSelectIncident,
+  runtimeDetail,
+  summary
+}: {
+  formatted: string | null
+  incidentIds: string[]
+  isBusy: boolean
+  onEmitAndProcess: () => void
+  onRefresh: () => void
+  onSelectIncident: (incidentId: string) => void
+  runtimeDetail: RuntimeIncidentResult | null
+  summary: RuntimeSummary | null
+}) {
+  return (
+    <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+      <Panel title="Live worker pipeline" icon={<Zap size={17} />}>
+        <MetricGrid>
+          <Metric label="Queue mode" value={summary?.queue_mode ?? 'pending'} mono />
+          <Metric label="Processed incidents" value={summary ? `${summary.incident_count}` : '0'} mono />
+          <Metric label="Latest incident" value={summary?.latest_incident_id ?? 'none'} mono />
+          <Metric label="Latest summary" value={summary?.latest_summary ?? 'No processed incidents yet'} />
+        </MetricGrid>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <ActionButton title="Emit demo failure" icon={<Play size={15} />} onClick={onEmitAndProcess} disabled={isBusy} />
+          <ActionButton title="Refresh runtime inbox" icon={<RefreshCw size={15} />} onClick={onRefresh} disabled={isBusy} />
+        </div>
+        {formatted ? (
+          <pre className="mt-4 max-h-[280px] min-w-0 overflow-auto whitespace-pre-wrap break-words rounded-[6px] border border-border bg-bg p-3 font-mono text-xs leading-6 text-text">
+            {formatted}
+          </pre>
+        ) : null}
+      </Panel>
+
+      <div className="grid min-w-0 content-start gap-4">
+        <Panel title="Incident inbox" icon={<Activity size={17} />}>
+          {incidentIds.length ? (
+            <div className="grid gap-2">
+              {incidentIds.map((incidentId) => (
+                <button
+                  key={incidentId}
+                  type="button"
+                  className="flex min-h-11 items-center justify-between gap-3 rounded-[6px] border border-border bg-surface px-3 py-2 text-left text-sm hover:border-accent/60"
+                  onClick={() => onSelectIncident(incidentId)}
+                >
+                  <span className="min-w-0 truncate font-mono text-text">{incidentId}</span>
+                  <ChevronRight size={16} className="shrink-0 text-muted" />
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted">No runtime incidents yet. Emit and process a demo failure to populate the inbox.</p>
+          )}
+        </Panel>
+
+        <Panel title="Selected incident" icon={<CheckCircle2 size={17} />}>
+          {runtimeDetail ? (
+            <div className="grid gap-3 text-sm leading-6">
+              <p>
+                <span className="font-semibold text-text">DAG:</span> {runtimeDetail.incident.dag_id}
+              </p>
+              <p>
+                <span className="font-semibold text-text">Task:</span> {runtimeDetail.incident.task_id}
+              </p>
+              <p>
+                <span className="font-semibold text-text">Category:</span> {runtimeDetail.incident.failure_category}
+              </p>
+              <p className="text-muted">{runtimeDetail.advice.likely_root_cause}</p>
+              <p className="text-text">{runtimeDetail.advice.recommended_fix}</p>
+              {runtimeDetail.advice.rejected_fix_warning ? (
+                <p className="text-danger">{runtimeDetail.advice.rejected_fix_warning}</p>
+              ) : null}
+            </div>
+          ) : (
+            <p className="text-sm text-muted">Select an incident from the inbox or process a new failure.</p>
+          )}
+        </Panel>
+      </div>
+    </div>
+  )
+}
+
 function SettingsView({
   health,
   seed,
@@ -787,7 +938,7 @@ function SettingsView({
   sourceCounts: Array<[string, number]>
 }) {
   return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+    <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
       <Panel title="Runtime" icon={<Settings size={17} />}>
         <MetricGrid>
           <Metric label="Service" value={String(health?.service ?? 'AirMemory')} mono />
@@ -818,7 +969,7 @@ function SettingsView({
 
 function Panel({ action, children, icon, title }: { action?: ReactNode; children: ReactNode; icon: ReactNode; title: string }) {
   return (
-    <section className="rounded-[6px] border border-border bg-panel p-4 shadow-lg shadow-black/10">
+    <section className="min-w-0 rounded-[6px] border border-border bg-panel p-4 shadow-lg shadow-black/10">
       <div className="mb-4 flex items-center justify-between gap-3 border-b border-border pb-3">
         <div className="flex min-w-0 items-center gap-2">
           <span className="text-accent">{icon}</span>
@@ -980,7 +1131,7 @@ function ResolutionList({ compact = false, ranks }: { compact?: boolean; ranks: 
 
 function RunbookPreview({ runbook }: { runbook: RunbookState | null }) {
   return (
-    <pre className="max-h-[360px] overflow-auto rounded-[6px] border border-border bg-bg p-3 font-mono text-xs leading-6 text-text">
+    <pre className="max-h-[360px] min-w-0 overflow-auto whitespace-pre-wrap break-words rounded-[6px] border border-border bg-bg p-3 font-mono text-xs leading-6 text-text">
       {runbook?.markdown ?? 'Runbook pending.'}
     </pre>
   )

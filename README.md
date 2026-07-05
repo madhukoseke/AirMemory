@@ -71,6 +71,8 @@ make web
 
 Open `http://127.0.0.1:3000`.
 
+The instrument panel now includes a **Runtime** view that connects to the live worker queue through `/runtime/*` API endpoints.
+
 ## Core Commands
 
 ```bash

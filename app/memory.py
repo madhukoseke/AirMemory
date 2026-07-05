@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from app.config import Settings
-from app.graph import lineage_graph
+from app.lineage import graph_for_symptom, migration_lineage_graph
 from app.ingest import count_by_source, load_sample_artifacts
 from app.parsers.base import NormalizedArtifact
 from app.schema import (
@@ -260,7 +260,9 @@ class MemoryEngine:
             citations.append(self.citation("runbook-deprecated-full-dag-clear"))
 
         if downstream:
-            graph_path = lineage_graph(active_downstream_path=True)
+            graph_path = graph_for_symptom("bq.prod.customer_metrics", active=True) or migration_lineage_graph(
+                active_downstream_path=True
+            )
             vector_only_contrast = (
                 "Vector-only recall has no high-confidence prior incident for the downstream "
                 "publish_metrics/Looker symptom. Graph recall follows DOWNSTREAM_OF edges back "
@@ -387,7 +389,7 @@ Failure summary: {failure_summary}
         )
 
     def graph(self) -> GraphPath:
-        return lineage_graph(active_downstream_path=True)
+        return migration_lineage_graph(active_downstream_path=True)
 
     async def evaluate(self) -> EvalResponse:
         self.state.reset()

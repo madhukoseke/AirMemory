@@ -10,7 +10,7 @@ Redis Stream or local JSONL queue
         |
         v
 AirMemory worker
-  normalize -> categorize -> fingerprint -> deterministic similarity
+  normalize -> categorize -> fingerprint -> deterministic similarity + lineage traversal
         |
         v
 Cognee recall wrapper -> advice generation -> Markdown wiki
@@ -39,10 +39,11 @@ MemoryEngine
         v
 FastAPI
   /seed /recall /improve /forget /runbook /graph /eval /health
+  /runtime/summary /runtime/incidents /runtime/emit /runtime/process
         |
         v
 Next.js instrument panel
-  failure, recall, citations, lineage graph, runbook, improve, forget, eval
+  failure, recall, citations, lineage graph, runtime inbox, runbook, improve, forget, eval
 ```
 
 ## Schema

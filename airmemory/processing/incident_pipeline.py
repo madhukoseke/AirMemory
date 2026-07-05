@@ -7,6 +7,7 @@ from airmemory.llm.client import generate_incident_advice
 from airmemory.models import AirflowFailureEvent, ProcessedIncidentResult
 from airmemory.processing.data import load_dag_metadata, load_historical_incidents
 from airmemory.processing.normalizer import normalize_event
+from airmemory.processing.lineage import find_lineage_incident_matches, merge_similarity_matches
 from airmemory.processing.similarity import find_similar_incidents
 from airmemory.wiki.templates import build_incident_memory_markdown
 from airmemory.wiki.writer import write_incident_wiki
@@ -16,7 +17,9 @@ async def process_failure_event(event: AirflowFailureEvent) -> ProcessedIncident
     dag_metadata = load_dag_metadata()
     incident = normalize_event(event, dag_metadata)
     historical_incidents = load_historical_incidents()
-    similar = find_similar_incidents(incident, historical_incidents, top_k=3)
+    deterministic = find_similar_incidents(incident, historical_incidents, top_k=3)
+    lineage_matches = find_lineage_incident_matches(incident, historical_incidents, top_k=3)
+    similar = merge_similarity_matches(deterministic, lineage_matches, top_k=3)
 
     recall_query = build_recall_query(incident)
     cognee_recall_text = await recall_similar_incidents(

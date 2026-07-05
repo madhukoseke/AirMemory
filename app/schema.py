@@ -127,3 +127,29 @@ class EvalResponse(BaseModel):
     rows: list[dict[str, object]]
     results_path: str
 
+
+class RuntimeSummary(BaseModel):
+    queue_mode: str
+    wiki_dir: str
+    state_dir: str
+    incident_count: int
+    latest_incident_id: str | None = None
+    latest_summary: str | None = None
+
+
+class RuntimeEmitResponse(BaseModel):
+    message_id: str
+    dag_id: str
+    task_id: str
+    incident_id: str
+
+
+class RuntimeIncidentList(BaseModel):
+    incident_ids: list[str]
+
+
+class RuntimeProcessResponse(BaseModel):
+    processed: bool
+    result: dict[str, object] | None = None
+    formatted: str
+
