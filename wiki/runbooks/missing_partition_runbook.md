@@ -8,6 +8,7 @@ Use this runbook when an Airflow DAG fails with category `missing_partition`.
 
 - partition not found in raw.customer_transactions
 - source table freshness check failed
+- credential expired for external connection
 
 ## Diagnosis Steps
 
@@ -36,3 +37,4 @@ Add an upstream partition availability sensor before transform_revenue.
 
 - inc_2026_06_12_customer_revenue_missing_partition (2026-06-12)
 - inc_2026_04_21_customer_revenue_late_source (2026-04-21)
+- inc_2026_02_18_payout_credentials_expired (2026-02-18)

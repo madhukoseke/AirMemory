@@ -4,11 +4,11 @@ import { Background, Controls, ReactFlow, type Edge, type Node } from '@xyflow/r
 import type { GraphPath } from '@/lib/api'
 
 const KIND_COLORS: Record<string, string> = {
-  pipeline: '#d8e1ea',
-  task: '#9aa8b8',
-  table: '#3ddc97',
-  incident: '#ff6b73',
-  resolution: '#7aa8ff'
+  pipeline: '#27272a',
+  task: '#71717a',
+  table: '#168a5b',
+  incident: '#d92d20',
+  resolution: '#2563eb'
 }
 
 const POSITIONS: Record<string, { x: number; y: number }> = {
@@ -37,9 +37,9 @@ export function LineageGraph({ graph }: { graph: GraphPath | null }) {
     position: POSITIONS[node.id] ?? { x: 0, y: 0 },
     data: { label: node.label },
     style: {
-      borderColor: node.active ? '#38d5ff' : '#263241',
+      borderColor: node.active ? '#18181b' : '#e4e4e7',
       color: KIND_COLORS[node.kind],
-      boxShadow: node.active ? '0 0 0 1px rgba(56, 213, 255, 0.35)' : 'none',
+      boxShadow: node.active ? '0 0 0 1px rgba(24, 24, 27, 0.18)' : 'none',
       width: 190,
       minHeight: 38,
       padding: 8,
@@ -55,16 +55,16 @@ export function LineageGraph({ graph }: { graph: GraphPath | null }) {
     label: edge.label,
     className: edge.active ? 'active' : '',
     animated: edge.active,
-    style: { stroke: edge.active ? '#38d5ff' : '#263241' },
-    labelStyle: { fill: edge.active ? '#38d5ff' : '#8b99a8', fontSize: 10 },
-    labelBgStyle: { fill: '#10151d' }
+    style: { stroke: edge.active ? '#18181b' : '#d4d4d8' },
+    labelStyle: { fill: edge.active ? '#18181b' : '#71717a', fontSize: 10 },
+    labelBgStyle: { fill: '#ffffff' }
   }))
 
   return (
-    <div className="overflow-x-auto rounded-[6px] border border-border bg-surface">
+    <div className="overflow-x-auto rounded-[6px] border border-border bg-panel">
       <div className="h-[420px] min-w-[780px]">
         <ReactFlow nodes={nodes} edges={edges} fitView minZoom={0.3} maxZoom={1.4}>
-          <Background color="#263241" gap={18} />
+          <Background color="#e4e4e7" gap={18} />
           <Controls showInteractive={false} />
         </ReactFlow>
       </div>

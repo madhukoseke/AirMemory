@@ -310,11 +310,11 @@ export function Dashboard() {
 
   return (
     <div className="min-h-screen bg-bg text-text">
-      <div className="lg:grid lg:grid-cols-[264px_minmax(0,1fr)]">
+      <div className="lg:grid lg:grid-cols-[248px_minmax(0,1fr)]">
         <ControlNav activeView={activeView} onSelect={switchView} />
         <MobileNav open={mobileNavOpen} activeView={activeView} onClose={() => setMobileNavOpen(false)} onSelect={switchView} />
 
-        <main className="min-w-0 px-4 pb-10 pt-4 sm:px-6 lg:px-8">
+        <main className="min-w-0 px-4 pb-10 pt-4 sm:px-6 lg:px-10">
           <CommandBar
             activeView={activeView}
             busyAction={busyAction}
@@ -405,16 +405,16 @@ export function Dashboard() {
 
 function ControlNav({ activeView, onSelect }: { activeView: ViewId; onSelect: (view: ViewId) => void }) {
   return (
-    <aside className="sticky top-0 hidden h-screen border-r border-border bg-panel/95 px-4 py-5 lg:block">
+    <aside className="sticky top-0 hidden h-screen border-r border-border bg-panel px-4 py-5 lg:block">
       <BrandBlock />
       <nav aria-label="Control plane" className="mt-7 grid gap-1">
         {NAV_ITEMS.map((item) => (
           <NavButton key={item.id} item={item} active={activeView === item.id} onSelect={onSelect} />
         ))}
       </nav>
-      <div className="absolute bottom-5 left-4 right-4 rounded-[6px] border border-border bg-surface p-3">
-        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted">
-          <Zap size={14} className="text-accent" />
+      <div className="absolute bottom-5 left-4 right-4 rounded-[6px] border border-border bg-bg p-3">
+        <div className="flex items-center gap-2 text-xs font-medium text-muted">
+          <Zap size={14} className="text-text" />
           Active incident
         </div>
         <p className="mt-2 font-mono text-sm text-text">{INCIDENT.id}</p>
@@ -441,8 +441,8 @@ function MobileNav({
 
   return (
     <div className="fixed inset-0 z-50 lg:hidden">
-      <button type="button" aria-label="Close navigation overlay" className="absolute inset-0 bg-black/60" onClick={onClose} />
-      <aside className="relative flex h-full w-[min(320px,calc(100vw-40px))] flex-col border-r border-border bg-panel p-4 shadow-2xl shadow-black/50">
+      <button type="button" aria-label="Close navigation overlay" className="absolute inset-0 bg-black/20" onClick={onClose} />
+      <aside className="relative flex h-full w-[min(320px,calc(100vw-40px))] flex-col border-r border-border bg-panel p-4 shadow-xl shadow-black/10">
         <div className="flex items-start justify-between gap-3">
           <BrandBlock />
           <IconOnlyButton title="Close navigation" icon={<X size={18} />} onClick={onClose} />
@@ -460,9 +460,9 @@ function MobileNav({
 function BrandBlock() {
   return (
     <div>
-      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-accent">Airflow memory ops</p>
-      <h1 className="mt-2 text-2xl font-semibold tracking-normal text-text">AirMemory</h1>
-      <p className="mt-2 max-w-[210px] text-xs leading-5 text-muted">Recall, lineage, feedback, and forgetting in one operator plane.</p>
+      <h1 className="text-xl font-semibold tracking-normal text-text">AirMemory</h1>
+      <p className="mt-1 text-sm text-muted">Memory control plane</p>
+      <p className="mt-4 max-w-[210px] text-xs leading-5 text-muted">Recall incidents, inspect lineage, and keep memory clean.</p>
     </div>
   )
 }
@@ -511,21 +511,21 @@ function CommandBar({
   const currentView = NAV_ITEMS.find((item) => item.id === activeView)
 
   return (
-    <header className="sticky top-0 z-30 -mx-4 mb-4 border-b border-border bg-bg/92 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+    <header className="sticky top-0 z-30 -mx-4 mb-5 border-b border-border bg-panel/85 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-10 lg:px-10">
       <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(420px,0.9fr)_auto] xl:items-center">
         <div className="flex min-w-0 items-center gap-3">
           <IconOnlyButton className="lg:hidden" title="Open navigation" icon={<Menu size={18} />} onClick={onMenu} />
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">{currentView?.description ?? 'Control plane'}</p>
+            <p className="text-xs font-medium text-muted">{currentView?.description ?? 'Control plane'}</p>
             <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-              <h2 className="text-xl font-semibold text-text">{currentView?.label ?? 'Overview'}</h2>
-              <span className="rounded-[6px] border border-border bg-surface px-2 py-1 font-mono text-[11px] text-accent">{INCIDENT.id}</span>
+              <h2 className="text-2xl font-semibold tracking-normal text-text">{currentView?.label ?? 'Overview'}</h2>
+              <span className="rounded-[6px] border border-border bg-surface2 px-2 py-1 font-mono text-[11px] text-muted">{INCIDENT.id}</span>
               <span className="min-w-0 truncate text-xs text-muted">{seed?.dataset ?? 'airmemory'} dataset</span>
             </div>
           </div>
         </div>
 
-        <label className="flex min-h-11 min-w-0 items-center gap-2 rounded-[6px] border border-border bg-surface px-3 focus-within:border-accent">
+        <label className="flex min-h-11 min-w-0 items-center gap-2 rounded-[6px] border border-border bg-panel px-3 focus-within:border-zinc-400">
           <Search size={16} className="shrink-0 text-muted" />
           <span className="sr-only">Memory question</span>
           <input
@@ -564,12 +564,12 @@ function KpiStrip({
   return (
     <section aria-label="Runtime KPIs" className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-7">
       {items.map((item) => (
-        <div key={item.label} className="rounded-[6px] border border-border bg-surface px-3 py-3">
+        <div key={item.label} className="rounded-[6px] border border-border bg-panel px-3 py-3">
           <div className="flex items-center justify-between gap-2">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">{item.label}</p>
+            <p className="text-xs font-medium text-muted">{item.label}</p>
             <span className={toneDotClass(item.tone)} />
           </div>
-          <p className="mt-2 truncate font-mono text-sm text-text" title={item.value}>
+          <p className="mt-2 truncate text-sm font-medium text-text" title={item.value}>
             {item.value}
           </p>
           <p className="mt-1 truncate text-xs text-muted" title={item.detail}>
@@ -676,11 +676,11 @@ function RecallView({
       <div className="grid min-w-0 gap-4">
         <Panel title="Ask memory" icon={<Brain size={17} />}>
           <label className="block">
-            <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-muted">Question</span>
+            <span className="mb-2 block text-xs font-medium text-muted">Question</span>
             <textarea
               value={question}
               onChange={(event) => onQuestionChange(event.target.value)}
-              className="min-h-32 w-full resize-y rounded-[6px] border border-border bg-bg p-3 font-mono text-sm leading-6 text-text outline-none focus:border-accent"
+              className="min-h-32 w-full resize-y rounded-[6px] border border-border bg-panel p-3 text-sm leading-6 text-text outline-none focus:border-zinc-400"
             />
           </label>
           <div className="mt-3 flex flex-wrap gap-2">
@@ -758,7 +758,7 @@ function ImproveView({
           <Metric label="Current score" value={accepted ? accepted.score.toFixed(2) : 'pending'} mono />
         </MetricGrid>
         <div className="mt-4 rounded-[6px] border border-border bg-bg p-3">
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">Feedback payload</p>
+          <p className="text-xs font-medium text-muted">Feedback payload</p>
           <p className="mt-2 font-mono text-sm leading-6 text-text">Confirmed the 3 day processing_date window resolved the incident.</p>
         </div>
         <ActionButton className="mt-4" title="Confirm fix and improve ranking" icon={<ThumbsUp size={15} />} onClick={onImprove} disabled={isBusy} />
@@ -802,7 +802,7 @@ function ForgetView({
           <Metric label="Deprecated visible" value={deprecatedVisible ? 'yes' : 'no'} tone={deprecatedVisible ? 'danger' : 'success'} mono />
           <Metric label="Leakage check" value={forget ? `${forget.leakage_check}` : 'pending'} tone={forget?.leakage_check === 0 ? 'success' : 'muted'} mono />
         </MetricGrid>
-        <div className="mt-4 rounded-[6px] border border-warning/40 bg-warning/10 p-3 text-sm leading-6 text-warning">
+        <div className="mt-4 rounded-[6px] border border-warning/20 bg-amber-50 p-3 text-sm leading-6 text-warning">
           This removes the deprecated workaround from retrieval. It does not run or clear any Airflow task.
         </div>
         <ActionButton className="mt-4" title="Remove deprecated workaround" icon={<Trash2 size={15} />} onClick={onForget} disabled={isBusy} tone="danger" />
@@ -888,7 +888,7 @@ function RuntimeView({
                 <button
                   key={incidentId}
                   type="button"
-                  className="flex min-h-11 items-center justify-between gap-3 rounded-[6px] border border-border bg-surface px-3 py-2 text-left text-sm hover:border-accent/60"
+                  className="flex min-h-11 items-center justify-between gap-3 rounded-[6px] border border-border bg-panel px-3 py-2 text-left text-sm hover:bg-surface2"
                   onClick={() => onSelectIncident(incidentId)}
                 >
                   <span className="min-w-0 truncate font-mono text-text">{incidentId}</span>
@@ -955,7 +955,7 @@ function SettingsView({
             {sourceCounts.map(([source, count]) => (
               <div key={source} className="flex min-h-11 items-center justify-between gap-3 border-b border-border py-2 text-sm last:border-b-0">
                 <span className="font-mono text-text">{source}</span>
-                <span className="font-mono text-accent">{count}</span>
+                <span className="font-mono text-text">{count}</span>
               </div>
             ))}
           </div>
@@ -969,11 +969,11 @@ function SettingsView({
 
 function Panel({ action, children, icon, title }: { action?: ReactNode; children: ReactNode; icon: ReactNode; title: string }) {
   return (
-    <section className="min-w-0 rounded-[6px] border border-border bg-panel p-4 shadow-lg shadow-black/10">
+    <section className="min-w-0 rounded-[6px] border border-border bg-panel p-5">
       <div className="mb-4 flex items-center justify-between gap-3 border-b border-border pb-3">
         <div className="flex min-w-0 items-center gap-2">
-          <span className="text-accent">{icon}</span>
-          <h3 className="truncate text-sm font-semibold uppercase tracking-[0.12em] text-muted">{title}</h3>
+          <span className="text-muted">{icon}</span>
+          <h3 className="truncate text-sm font-semibold text-text">{title}</h3>
         </div>
         {action}
       </div>
@@ -999,7 +999,7 @@ function Metric({
 }) {
   return (
     <div className="grid gap-1 border-b border-border py-2 last:border-b-0 sm:grid-cols-[136px_minmax(0,1fr)] sm:gap-4">
-      <dt className="text-xs font-semibold uppercase tracking-[0.1em] text-muted">{label}</dt>
+      <dt className="text-xs font-medium text-muted">{label}</dt>
       <dd className={`${mono ? 'font-mono' : ''} min-w-0 text-sm leading-6 ${toneTextClass(tone)}`}>
         <span className="block overflow-x-auto whitespace-nowrap pb-1">{value}</span>
       </dd>
@@ -1049,7 +1049,7 @@ function IconOnlyButton({
 }
 
 function StatusPill({ children, tone }: { children: ReactNode; tone: 'success' | 'warning' | 'danger' }) {
-  return <span className={`rounded-[6px] border px-2 py-1 font-mono text-[11px] ${pillToneClass(tone)}`}>{children}</span>
+  return <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${pillToneClass(tone)}`}>{children}</span>
 }
 
 function AnswerText({ answer }: { answer?: string }) {
@@ -1066,7 +1066,7 @@ function CitationLedger({ citations, compact = false }: { citations: Citation[];
       {citations.map((citation) => (
         <div key={citation.id} className="grid gap-2 border-b border-border py-3 last:border-b-0 md:grid-cols-[180px_minmax(0,1fr)]">
           <div className="min-w-0">
-            <p className="truncate font-mono text-xs text-accent" title={citation.label}>
+            <p className="truncate font-mono text-xs text-text" title={citation.label}>
               {citation.label}
             </p>
             <p className="mt-1 font-mono text-[11px] text-muted">{citation.source}</p>
@@ -1075,7 +1075,7 @@ function CitationLedger({ citations, compact = false }: { citations: Citation[];
             <p className="text-sm leading-6 text-text">{citation.excerpt}</p>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {citation.facets.slice(0, 4).map((facet) => (
-                <span key={facet} className="rounded-[6px] border border-border bg-surface px-2 py-1 font-mono text-[11px] text-muted">
+                <span key={facet} className="rounded-full border border-border bg-bg px-2 py-1 font-mono text-[11px] text-muted">
                   {facet}
                 </span>
               ))}
@@ -1098,7 +1098,7 @@ function ResolutionHighlight({ accepted, topResolution }: { accepted?: Resolutio
     <div>
       <div className="flex items-center justify-between gap-3">
         <StatusPill tone={rank.status === 'deprecated' ? 'danger' : 'success'}>#{rank.rank}</StatusPill>
-        <span className="font-mono text-sm text-accent">{rank.score.toFixed(2)}</span>
+        <span className="font-mono text-sm text-muted">{rank.score.toFixed(2)}</span>
       </div>
       <p className="mt-4 text-lg font-semibold leading-7 text-text">{rank.title}</p>
       <p className="mt-2 text-sm text-muted">Status: {rank.status}</p>
@@ -1115,12 +1115,12 @@ function ResolutionList({ compact = false, ranks }: { compact?: boolean; ranks: 
     <div className="grid gap-2">
       {ranks.map((rank) => (
         <div key={rank.id} className="grid min-h-11 gap-2 border-b border-border py-3 last:border-b-0 sm:grid-cols-[48px_minmax(0,1fr)_auto] sm:items-start">
-          <span className={rank.rank === 1 ? 'font-mono text-sm text-accent' : 'font-mono text-sm text-muted'}>#{rank.rank}</span>
+          <span className={rank.rank === 1 ? 'font-mono text-sm text-text' : 'font-mono text-sm text-muted'}>#{rank.rank}</span>
           <div className="min-w-0">
             <p className={`${compact ? 'text-sm' : 'text-base'} leading-6 text-text`}>{rank.title}</p>
             <p className="mt-1 overflow-x-auto whitespace-nowrap font-mono text-[11px] text-muted">{rank.id}</p>
           </div>
-          <span className={`w-fit rounded-[6px] border px-2 py-1 font-mono text-[11px] ${rank.status === 'deprecated' ? 'border-danger/50 text-danger' : 'border-success/50 text-success'}`}>
+          <span className={`w-fit rounded-full border px-2 py-0.5 text-xs font-medium ${rank.status === 'deprecated' ? 'border-danger/20 bg-red-50 text-danger' : 'border-success/20 bg-emerald-50 text-success'}`}>
             {rank.status}
           </span>
         </div>
@@ -1141,7 +1141,7 @@ function PathSummary({ contrast, graph }: { contrast?: string | null; graph: Gra
   return (
     <div className="mt-4 grid gap-2">
       <p className="text-sm leading-6 text-muted">{graph?.explanation ?? 'Lineage graph pending.'}</p>
-      {contrast ? <p className="rounded-[6px] border border-accent/40 bg-accent/10 p-3 text-sm leading-6 text-accent">{contrast}</p> : null}
+      {contrast ? <p className="rounded-[6px] border border-border bg-bg p-3 text-sm leading-6 text-muted">{contrast}</p> : null}
     </div>
   )
 }
@@ -1155,7 +1155,7 @@ function PathList({ graph }: { graph: GraphPath | null }) {
     <div className="grid gap-2">
       {graph.edges.map((edge) => (
         <div key={edge.id} className="border-b border-border py-2 last:border-b-0">
-          <p className={edge.active ? 'font-mono text-xs text-accent' : 'font-mono text-xs text-muted'}>{edge.label}</p>
+          <p className={edge.active ? 'font-mono text-xs text-text' : 'font-mono text-xs text-muted'}>{edge.label}</p>
           <p className="mt-1 overflow-x-auto whitespace-nowrap font-mono text-[11px] text-text">
             {edge.source} {'->'} {edge.target}
           </p>
@@ -1202,11 +1202,11 @@ function EvalBar({ accent = false, label, value }: { accent?: boolean; label: st
   return (
     <div>
       <div className="mb-1 flex items-center justify-between gap-3">
-        <span className="text-xs font-semibold uppercase tracking-[0.1em] text-muted">{label}</span>
+        <span className="text-xs font-medium text-muted">{label}</span>
         <span className="font-mono text-xs text-text">{pct(value)}</span>
       </div>
       <div className="h-2 overflow-hidden rounded-full bg-surface2">
-        <div className={accent ? 'h-full rounded-full bg-success' : 'h-full rounded-full bg-accent'} style={{ width: `${Math.max(value * 100, value > 0 ? 6 : 0)}%` }} />
+        <div className={accent ? 'h-full rounded-full bg-success' : 'h-full rounded-full bg-text'} style={{ width: `${Math.max(value * 100, value > 0 ? 6 : 0)}%` }} />
       </div>
     </div>
   )
@@ -1220,7 +1220,7 @@ function EvalRowsTable({ evalResult }: { evalResult: EvalResponse | null }) {
   return (
     <div className="overflow-x-auto">
       <table className="min-w-[760px] w-full border-collapse text-left text-sm">
-        <thead className="text-xs uppercase tracking-[0.1em] text-muted">
+        <thead className="text-xs text-muted">
           <tr className="border-b border-border">
             <th className="py-2 pr-4 font-semibold">Pass</th>
             <th className="py-2 pr-4 font-semibold">Query</th>
@@ -1233,7 +1233,7 @@ function EvalRowsTable({ evalResult }: { evalResult: EvalResponse | null }) {
         <tbody>
           {evalResult.rows.map((row, index) => (
             <tr key={`${String(row.pass)}-${index}`} className="border-b border-border last:border-b-0">
-              <td className="py-3 pr-4 font-mono text-xs text-accent">{String(row.pass ?? '')}</td>
+              <td className="py-3 pr-4 font-mono text-xs text-text">{String(row.pass ?? '')}</td>
               <td className="max-w-[360px] py-3 pr-4 text-text">{String(row.query ?? '')}</td>
               <td className="py-3 pr-4 font-mono text-xs text-muted">{String(row.expected_resolution ?? '')}</td>
               <td className="py-3 pr-4 font-mono text-xs text-text">{String(row.actual_rank ?? '')}</td>
@@ -1256,23 +1256,23 @@ function toneTextClass(tone: 'default' | 'success' | 'warning' | 'danger' | 'mut
 }
 
 function toneDotClass(tone: string) {
-  if (tone === 'success') return 'h-2 w-2 rounded-full bg-success'
-  if (tone === 'warning') return 'h-2 w-2 rounded-full bg-warning'
-  if (tone === 'danger') return 'h-2 w-2 rounded-full bg-danger'
-  if (tone === 'info') return 'h-2 w-2 rounded-full bg-accent'
-  return 'h-2 w-2 rounded-full bg-muted'
+  if (tone === 'success') return 'h-1.5 w-1.5 rounded-full bg-success'
+  if (tone === 'warning') return 'h-1.5 w-1.5 rounded-full bg-warning'
+  if (tone === 'danger') return 'h-1.5 w-1.5 rounded-full bg-danger'
+  if (tone === 'info') return 'h-1.5 w-1.5 rounded-full bg-zinc-400'
+  return 'h-1.5 w-1.5 rounded-full bg-zinc-300'
 }
 
 function buttonToneClass(tone: 'primary' | 'secondary' | 'danger') {
-  if (tone === 'danger') return 'border-danger/50 bg-danger/10 text-danger hover:bg-danger/15'
-  if (tone === 'secondary') return 'border-border bg-surface text-text hover:border-accent/60 hover:text-accent'
-  return 'border-accent/50 bg-accent/15 text-accent hover:bg-accent/20'
+  if (tone === 'danger') return 'border-danger/20 bg-red-50 text-danger hover:bg-red-100'
+  if (tone === 'secondary') return 'border-border bg-panel text-text hover:bg-surface2'
+  return 'border-text bg-text text-panel hover:bg-zinc-700'
 }
 
 function pillToneClass(tone: 'success' | 'warning' | 'danger') {
-  if (tone === 'success') return 'border-success/50 bg-success/10 text-success'
-  if (tone === 'danger') return 'border-danger/50 bg-danger/10 text-danger'
-  return 'border-warning/50 bg-warning/10 text-warning'
+  if (tone === 'success') return 'border-success/20 bg-emerald-50 text-success'
+  if (tone === 'danger') return 'border-danger/20 bg-red-50 text-danger'
+  return 'border-warning/20 bg-amber-50 text-warning'
 }
 
 function pct(value: number) {

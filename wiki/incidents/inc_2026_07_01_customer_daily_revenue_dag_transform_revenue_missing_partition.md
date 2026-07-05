@@ -24,7 +24,8 @@ The upstream raw.customer_transactions partition was not available when the DAG 
 ## Similar Incidents
 
 - `inc_2026_06_12_customer_revenue_missing_partition` - 1.00: Same failure category, same DAG, same task, same source table raw.customer_transactions, overlapping normalized error keywords.
-- `inc_2026_04_21_customer_revenue_late_source` - 0.35: Same DAG, same source table raw.customer_transactions.
+- `inc_2026_04_21_customer_revenue_late_source` - 0.60: Upstream lineage overlap at raw.customer_transactions.
+- `inc_2026_02_18_payout_credentials_expired` - 0.45: Lineage-linked DAG merchant_payout_dag.
 
 ## Accepted Fix From Previous Incident
 

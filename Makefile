@@ -1,7 +1,7 @@
 PYTHON ?= python3
 API_PORT ?= 8000
 
-.PHONY: seed seed-app seed-memory emit worker reset demo dashboard api web eval test smoke
+.PHONY: seed seed-app seed-memory emit worker reset demo dashboard api web eval test smoke web-check check
 
 seed: seed-memory
 
@@ -37,6 +37,11 @@ eval:
 
 test:
 	pytest
+
+web-check:
+	cd web && npm run lint && npm run build
+
+check: test smoke web-check
 
 smoke:
 	$(PYTHON) scripts/seed_memory.py

@@ -1,20 +1,20 @@
 :root {
-  --bg: #07090f;
-  --panel: #10151d;
-  --surface: #151c26;
-  --surface-2: #1b2430;
-  --accent: #38d5ff;
-  --success: #3ddc97;
-  --warning: #f7b955;
-  --danger: #ff6b73;
-  --text: #e6edf3;
-  --text-muted: #8b99a8;
-  --border: #263241;
-  --graph-pipeline: #d8e1ea;
-  --graph-task: #9aa8b8;
-  --graph-table: #3ddc97;
-  --graph-incident: #ff6b73;
-  --graph-resolution: #7aa8ff;
-  --font-sans: "IBM Plex Sans";
-  --font-mono: "JetBrains Mono";
+  --bg: #fafafa;
+  --panel: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f4f4f5;
+  --accent: #18181b;
+  --success: #168a5b;
+  --warning: #b45309;
+  --danger: #d92d20;
+  --text: #18181b;
+  --text-muted: #71717a;
+  --border: #e4e4e7;
+  --graph-pipeline: #27272a;
+  --graph-task: #71717a;
+  --graph-table: #168a5b;
+  --graph-incident: #d92d20;
+  --graph-resolution: #2563eb;
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI";
+  --font-mono: "SFMono-Regular";
 }

@@ -29,9 +29,11 @@ Delays customer revenue dashboard and daily executive revenue reporting.
 - [inc_2026_07_01_customer_daily_revenue_dag_transform_revenue_missing_partition](../incidents/inc_2026_07_01_customer_daily_revenue_dag_transform_revenue_missing_partition.md)
 - inc_2026_06_12_customer_revenue_missing_partition (2026-06-12) - missing_partition
 - inc_2026_04_21_customer_revenue_late_source (2026-04-21) - late_source_data
+- inc_2026_02_18_payout_credentials_expired (2026-02-18) - credential_expired
 
 ## Common Failure Patterns
 
+- credential_expired
 - late_source_data
 - missing_partition
 
@@ -39,3 +41,4 @@ Delays customer revenue dashboard and daily executive revenue reporting.
 
 - Backfill the missing raw.customer_transactions partition and rerun the DAG from transform_revenue.
 - Wait for CDC completion and rerun extract_transactions.
+- Rotate key, update secret, and rerun from connect_to_bank_sftp.
