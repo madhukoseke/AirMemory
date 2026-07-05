@@ -18,6 +18,14 @@ It uses [Cognee](https://docs.cognee.ai/) for long-term memory: graph + vector s
 
 ## How it fits together
 
+When `validate_row_counts` fails with `ROW_COUNT_MISMATCH`, AirMemory does not stop at the log line. The worker normalizes the failure, walks upstream lineage, ingests artifacts into Cognee (graph + vector memory), recalls prior incidents like INC-1029, and returns a ranked fix with citations — while `forget()` keeps rejected workarounds out of the answer. The on-call engineer gets a safe recommendation, a runbook, and a feedback loop via `improve()`.
+
+![End-to-end AirMemory flow: Airflow failure → ingestion pipeline → Cognee hybrid memory → on-call advice with lineage-aware recall](docs/airmemory-architecture.png)
+
+*Figure: from DAG failure through cognify/memify ingestion to hybrid recall. The graph lets AirMemory traverse upstream (`DOWNSTREAM_OF`) when the symptom table has no direct match — not just vector similarity on the downstream error.*
+
+The component view below shows the same system split into queue, worker, memory, and UI layers:
+
 ```mermaid
 flowchart TB
     subgraph Sources
