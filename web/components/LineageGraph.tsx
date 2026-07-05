@@ -4,11 +4,11 @@ import { Background, Controls, ReactFlow, type Edge, type Node } from '@xyflow/r
 import type { GraphPath } from '@/lib/api'
 
 const KIND_COLORS: Record<string, string> = {
-  pipeline: '#e5e5e5',
-  task: '#b8b8b8',
-  table: '#4ade80',
-  incident: '#fca5a5',
-  resolution: '#93c5fd'
+  pipeline: '#d8e1ea',
+  task: '#9aa8b8',
+  table: '#3ddc97',
+  incident: '#ff6b73',
+  resolution: '#7aa8ff'
 }
 
 const POSITIONS: Record<string, { x: number; y: number }> = {
@@ -26,7 +26,7 @@ const POSITIONS: Record<string, { x: number; y: number }> = {
 export function LineageGraph({ graph }: { graph: GraphPath | null }) {
   if (!graph) {
     return (
-      <div className="flex h-[320px] items-center justify-center border border-dashed border-border text-xs text-muted">
+      <div className="flex h-[360px] items-center justify-center rounded-[6px] border border-border bg-surface text-xs text-muted">
         graph pending
       </div>
     )
@@ -37,14 +37,14 @@ export function LineageGraph({ graph }: { graph: GraphPath | null }) {
     position: POSITIONS[node.id] ?? { x: 0, y: 0 },
     data: { label: node.label },
     style: {
-      borderColor: node.active ? '#4ade80' : '#2a2a2a',
+      borderColor: node.active ? '#38d5ff' : '#263241',
       color: KIND_COLORS[node.kind],
-      boxShadow: node.active ? '0 0 0 1px rgba(74, 222, 128, 0.35)' : 'none',
+      boxShadow: node.active ? '0 0 0 1px rgba(56, 213, 255, 0.35)' : 'none',
       width: 190,
       minHeight: 38,
       padding: 8,
       whiteSpace: 'normal',
-      overflowWrap: 'anywhere'
+      overflowWrap: 'break-word'
     }
   }))
 
@@ -55,18 +55,19 @@ export function LineageGraph({ graph }: { graph: GraphPath | null }) {
     label: edge.label,
     className: edge.active ? 'active' : '',
     animated: edge.active,
-    style: { stroke: edge.active ? '#4ade80' : '#2a2a2a' },
-    labelStyle: { fill: edge.active ? '#4ade80' : '#888888', fontSize: 10 },
-    labelBgStyle: { fill: '#0a0a0a' }
+    style: { stroke: edge.active ? '#38d5ff' : '#263241' },
+    labelStyle: { fill: edge.active ? '#38d5ff' : '#8b99a8', fontSize: 10 },
+    labelBgStyle: { fill: '#10151d' }
   }))
 
   return (
-    <div className="h-[320px] overflow-hidden border border-dashed border-border bg-surface">
-      <ReactFlow nodes={nodes} edges={edges} fitView minZoom={0.3} maxZoom={1.4}>
-        <Background color="#242424" gap={18} />
-        <Controls showInteractive={false} />
-      </ReactFlow>
+    <div className="overflow-x-auto rounded-[6px] border border-border bg-surface">
+      <div className="h-[420px] min-w-[780px]">
+        <ReactFlow nodes={nodes} edges={edges} fitView minZoom={0.3} maxZoom={1.4}>
+          <Background color="#263241" gap={18} />
+          <Controls showInteractive={false} />
+        </ReactFlow>
+      </div>
     </div>
   )
 }
-

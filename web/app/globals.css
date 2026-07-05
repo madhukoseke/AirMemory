@@ -18,29 +18,13 @@ body {
   margin: 0;
   color: var(--text);
   background:
-    linear-gradient(rgba(74, 222, 128, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(74, 222, 128, 0.025) 1px, transparent 1px),
+    radial-gradient(circle at 18% 8%, rgba(56, 213, 255, 0.08), transparent 28rem),
+    linear-gradient(rgba(56, 213, 255, 0.028) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(56, 213, 255, 0.018) 1px, transparent 1px),
     var(--bg);
-  background-size: 28px 28px;
-  font-family: var(--font-mono), "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  background-size: auto, 32px 32px, 32px 32px, auto;
+  font-family: var(--font-sans), "IBM Plex Sans", Aptos, "Segoe UI", sans-serif;
   letter-spacing: 0;
-}
-
-body::before {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  pointer-events: none;
-  content: "";
-  background: repeating-linear-gradient(
-    to bottom,
-    rgba(255, 255, 255, 0.025),
-    rgba(255, 255, 255, 0.025) 1px,
-    transparent 1px,
-    transparent 4px
-  );
-  opacity: 0.24;
-  mix-blend-mode: overlay;
 }
 
 button,
@@ -51,9 +35,18 @@ textarea {
 
 button:focus-visible,
 input:focus-visible,
-textarea:focus-visible {
-  outline: 1px dashed var(--accent);
+textarea:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--accent);
   outline-offset: 3px;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
 }
 
 .react-flow {
@@ -61,8 +54,8 @@ textarea:focus-visible {
 }
 
 .react-flow__node {
-  border: 1px dashed var(--border);
-  border-radius: 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
   background: var(--surface-2);
   color: var(--text);
   font-family: var(--font-mono), ui-monospace, monospace;
@@ -83,6 +76,83 @@ textarea:focus-visible {
   display: none;
 }
 
-.overflow-wrap-anywhere {
-  overflow-wrap: anywhere;
+@layer components {
+  .nav-item {
+    display: flex;
+    min-height: 52px;
+    align-items: center;
+    gap: 0.75rem;
+    border-radius: 6px;
+    padding: 0.625rem 0.75rem;
+    color: var(--text-muted);
+    transition:
+      color 180ms ease,
+      background-color 180ms ease,
+      border-color 180ms ease;
+  }
+
+  .nav-item:hover {
+    background: var(--surface);
+    color: var(--text);
+  }
+
+  .nav-item-active {
+    background: rgba(56, 213, 255, 0.11);
+    color: var(--accent);
+    box-shadow: inset 0 0 0 1px rgba(56, 213, 255, 0.24);
+  }
+
+  .control-button {
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-width: 1px;
+    border-radius: 6px;
+    padding: 0.625rem 0.875rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    transition:
+      color 180ms ease,
+      background-color 180ms ease,
+      border-color 180ms ease,
+      opacity 180ms ease;
+  }
+
+  .control-button:disabled {
+    opacity: 0.48;
+  }
+
+  .icon-button {
+    display: inline-flex;
+    min-height: 44px;
+    min-width: 44px;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface);
+    color: var(--text);
+    transition:
+      color 180ms ease,
+      background-color 180ms ease,
+      border-color 180ms ease;
+  }
+
+  .icon-button:hover {
+    border-color: rgba(56, 213, 255, 0.6);
+    color: var(--accent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }
