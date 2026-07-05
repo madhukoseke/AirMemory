@@ -12,7 +12,7 @@ def main() -> None:
 
     st.set_page_config(page_title="AirMemory", layout="wide")
     st.title("AirMemory")
-    st.caption("Airflow has logs. AirMemory gives it memory.")
+    st.caption("Airflow has logs. Cognee gives it memory.")
 
     redis = RedisClient()
     latest = redis.latest_incident_ids()

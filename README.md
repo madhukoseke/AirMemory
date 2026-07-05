@@ -1,10 +1,16 @@
 # AirMemory
 
-**Airflow has logs. AirMemory gives it memory.**
+**Airflow has logs. Cognee gives it memory.**
 
-When a DAG fails at 3 AM, Airflow tells you what broke. It does not remember why it broke last month, what fix worked, or what your team already tried and rejected. AirMemory stores that context and surfaces it the next time something similar happens.
+A memory layer for Airflow operations, powered by [Cognee](https://docs.cognee.ai/). AirMemory listens to failures, remembers how incidents were resolved, connects symptoms to root causes through lineage, and improves over time as engineers accept or reject fixes.
 
-It uses [Cognee](https://docs.cognee.ai/) for long-term memory: graph + vector search over past incidents, runbooks, and fixes. It also writes a plain markdown wiki your team can read without opening the app.
+Most debugging time is not spent finding *new* problems. It is spent rediscovering *old* ones. You already have logs, dashboards, and postmortems — but when `customer_daily_migration_dag` fails on `validate_row_counts` with `ROW_COUNT_MISMATCH`, searching Slack and the wiki does not connect a downstream `publish_metrics` symptom to the upstream row-count window fix someone validated months ago.
+
+AirMemory answers the question on-call engineers actually ask:
+
+> Have we seen this before, what worked, and what should we avoid this time?
+
+The goal is simple: **the next on-call engineer should not have to rediscover what the last one already learned.**
 
 ## What you get
 
@@ -15,6 +21,25 @@ It uses [Cognee](https://docs.cognee.ai/) for long-term memory: graph + vector s
 5. **Advise** on what to do next
 6. **Remember** the new incident back into memory and update `wiki/`
 7. **Learn** when engineers confirm or reject fixes (improve / forget)
+
+## The problem
+
+Data platforms are stateful. A bad load into `customer_master` can surface later as wrong numbers in `customer_metrics`, even if the task that gets paged is not the one that failed first. Most incident response still looks like this:
+
+```mermaid
+flowchart LR
+    A[Task fails] --> B[Pager fires]
+    B --> C[Engineer starts digging]
+    C --> D[Search Slack, wiki, Jira]
+    D --> E{Found prior fix?}
+    E -->|Yes| F[Apply fix]
+    E -->|No| G[Debug from scratch]
+    G --> H[Write postmortem]
+    H --> I[Memory fades]
+    I --> A
+```
+
+The postmortem exists. The runbook exists. The bad workaround exists too, usually buried next to the good one. Vector search helps when failures look almost identical. In production they rarely do — different task, different symptom, same root cause. AirMemory uses lineage and graph memory to follow the path upstream.
 
 ## How it fits together
 
@@ -69,6 +94,16 @@ There are two entry points:
 
 Both use the same worker and Cognee dataset.
 
+AirMemory sits beside Airflow. It does not replace your warehouse, wiki, or alerting stack. Three storage layers handle different jobs:
+
+| Layer | Job |
+|-------|-----|
+| Cognee | Long-term structured memory (graph + vectors) |
+| Redis | Real-time event and dashboard state |
+| Markdown (`wiki/`) | Human-readable incident notes you can diff in Git |
+
+Local mode works without Cognee credentials — deterministic matching and markdown under `.airmemory_state/` — so you can start capturing better incident records before turning on the full memory layer.
+
 ## Runtime pipeline
 
 This runs when a task fails in Airflow (or when you emit a demo event).
@@ -92,7 +127,7 @@ sequenceDiagram
     W->>C: remember(incident markdown)
 ```
 
-The worker code in `airmemory/processing/incident_pipeline.py` does roughly this:
+The worker code in `airmemory/processing/incident_pipeline.py` does roughly this. The order is deliberate: deterministic matching first, Cognee recall second, advice third, memory write last.
 
 ```python
 incident = normalize_event(event, dag_metadata)
@@ -100,7 +135,7 @@ deterministic = find_similar_incidents(incident, historical_incidents, top_k=3)
 lineage_matches = find_lineage_incident_matches(incident, historical_incidents, top_k=3)
 similar = merge_similarity_matches(deterministic, lineage_matches, top_k=3)
 
-recall_query = build_recall_query(incident)
+recall_query = build_recall_query(incident)  # structured query, not a raw stack trace
 cognee_recall_text = await recall_similar_incidents(
     query=recall_query,
     dataset_name=settings.cognee_dataset,
@@ -109,6 +144,8 @@ cognee_recall_text = await recall_similar_incidents(
 advice = await generate_incident_advice(incident, similar, cognee_recall_text, ...)
 await remember_incident_markdown(incident_markdown, dataset_name=settings.cognee_dataset)
 ```
+
+Fingerprints, lineage, and structured data still earn their place — embeddings should not be the only thing between an exhausted engineer and a bad recommendation.
 
 ## Instrument panel
 
@@ -139,7 +176,16 @@ The **Runtime** tab talks to the live worker queue (`/runtime/*`). You can emit 
 
 Embeddings miss a common case: the failure shows up downstream, but the root cause is upstream.
 
-Looker metrics go stale on `publish_metrics`. There is no prior incident on that table. But walking upstream:
+```text
+Symptom:  publish_metrics / bq.prod.customer_metrics looks wrong
+Vector:   no high-confidence prior incident for this exact symptom
+Graph:    customer_metrics
+            <- DOWNSTREAM_OF customer_master
+            <- DOWNSTREAM_OF hana.customer_master
+            <- INC-1029 row-count window fix
+```
+
+Vector search saw a different task and a different symptom. The graph saw the path upstream. Looker metrics go stale on `publish_metrics`. There is no prior incident on that table. But walking upstream:
 
 ```mermaid
 flowchart BT
@@ -153,7 +199,7 @@ flowchart BT
     INC -.->|AFFECTS| MASTER
 ```
 
-AirMemory follows `DOWNSTREAM_OF` edges until it hits INC-1029. Pure vector recall on the downstream symptom often comes up empty.
+AirMemory follows `DOWNSTREAM_OF` edges until it hits INC-1029. Pure vector recall on the downstream symptom often comes up empty. The API exposes this as `vector_only_contrast` so engineers can see *why* a recommendation exists.
 
 ## Quickstart
 
@@ -186,7 +232,16 @@ AIRMEMORY_USE_LOCAL_QUEUE=0 python scripts/run_worker.py --once
 
 ## Cognee
 
-Cognee holds the long-term memory. AirMemory wraps `remember`, `recall`, `improve`, and `forget`. If Cognee is not installed, it falls back to markdown files under `.airmemory_state/cognee_memory/`.
+[Cognee](https://docs.cognee.ai/) is not just a place to store text chunks — it builds a graph of entities and relationships. AirMemory wraps four primitives that map cleanly to incident response:
+
+| Primitive | What it does | Why it matters on-call |
+|-----------|--------------|------------------------|
+| `remember()` | Stores incidents, runbooks, and feedback | Every fix becomes reusable |
+| `recall()` | Retrieves relevant memory across datasets | Ask "have we seen this before?" |
+| `improve()` | Ranks better answers higher from feedback | Accepted fixes rise above old guesses |
+| `forget()` | Removes scoped memory | Deprecated advice can be actively removed |
+
+If Cognee is not installed, AirMemory falls back to markdown files under `.airmemory_state/cognee_memory/`.
 
 ```mermaid
 stateDiagram-v2
@@ -292,7 +347,7 @@ In the web panel: **Forget** tab removes the "clear full DAG" workaround. Leakag
 
 ### Graph model
 
-When seeding artifacts, AirMemory passes a domain schema so Cognee knows about pipelines, tasks, tables, and incidents:
+That schema changes the question from "which documents look similar to this error?" to "is this table, task, or downstream output connected to an incident we already solved?" When seeding artifacts, AirMemory passes a domain schema:
 
 ```python
 graph_model = {

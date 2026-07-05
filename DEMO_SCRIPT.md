@@ -68,4 +68,4 @@ AirMemory generates:
 
 Every failed DAG now makes the team smarter.
 
-Airflow has logs. AirMemory gives it memory.
+Airflow has logs. Cognee gives it memory.
