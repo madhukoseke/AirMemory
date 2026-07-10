@@ -12,6 +12,10 @@ web/node_modules/
 web/.next/
 web/out/
 web/.env.local
+web/tsconfig.tsbuildinfo
+web/.deploy-payload.json
+web/full-deploy.json
+web/.vercel/
 
 dist/
 build/

@@ -1,6 +1,9 @@
 'use client'
 
 import dynamic from 'next/dynamic'
+import { HomeDashboard } from '@/components/HomeDashboard'
+import { MarkdownDoc } from '@/components/MarkdownDoc'
+import { DOC_KIND_LABEL, DOCS, getDoc, listDocs, type DocKind } from '@/lib/docs'
 import {
   Activity,
   AlertTriangle,
@@ -12,6 +15,7 @@ import {
   Database,
   FileText,
   GitBranch,
+  Home,
   LayoutDashboard,
   Menu,
   Play,
@@ -27,6 +31,8 @@ import {
 import type { ComponentType, ReactNode } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
+  buildRecallQuestion,
+  buildRunbookContext,
   emitRuntimeFailure,
   forgetDeprecated,
   generateRunbook,
@@ -35,6 +41,7 @@ import {
   getRuntimeIncident,
   getRuntimeSummary,
   improveMemory,
+  isDemoMode,
   listRuntimeIncidents,
   processRuntimeFailure,
   recallMemory,
@@ -57,7 +64,7 @@ const LineageGraph = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="flex h-[360px] items-center justify-center rounded-[6px] border border-border bg-surface text-xs text-muted">
+      <div className="flex h-[360px] items-center justify-center rounded-control border border-border bg-surface text-xs text-muted">
         graph loading
       </div>
     )
@@ -68,17 +75,31 @@ const DEFAULT_QUESTION = 'Have we seen validate_row_counts fail on customer_mast
 const DOWNSTREAM_QUESTION =
   'Looker customer_metrics is stale after publish_metrics. Have we seen the upstream cause?'
 
-const INCIDENT = {
+const SEED_INCIDENT = {
   id: 'INC-1029',
   dag: 'customer_daily_migration_dag',
   task: 'validate_row_counts',
   error: 'ROW_COUNT_MISMATCH',
+  category: 'row_count_mismatch',
   counts: 'HANA 1588 / BigQuery 1297 / diff 291',
   blocked: 'publish_metrics',
-  table: 'bq.prod.customer_master'
+  table: 'bq.prod.customer_master',
+  source: 'seed' as const
 }
 
-type ViewId = 'overview' | 'recall' | 'lineage' | 'runtime' | 'improve' | 'forget' | 'evals' | 'settings'
+type ActiveIncident = {
+  id: string
+  dag: string
+  task: string
+  error: string
+  category: string
+  counts?: string
+  blocked?: string
+  table?: string
+  source: 'runtime' | 'seed'
+}
+
+type ViewId = 'home' | 'overview' | 'recall' | 'lineage' | 'docs' | 'runtime' | 'improve' | 'forget' | 'evals' | 'settings'
 
 type IconType = ComponentType<{ size?: number; className?: string }>
 
@@ -89,43 +110,61 @@ type NavItem = {
   icon: IconType
 }
 
-type RunbookState = {
-  markdown: string
-  citations: Citation[]
-}
-
 type BusyAction = 'refresh' | 'recall' | 'lineage' | 'runtime' | 'improve' | 'forget' | 'eval' | null
 
-const NAV_ITEMS: NavItem[] = [
-  { id: 'overview', label: 'Overview', description: 'Incident command', icon: LayoutDashboard },
-  { id: 'recall', label: 'Recall', description: 'Answers and citations', icon: Brain },
-  { id: 'lineage', label: 'Lineage', description: 'Graph path reasoning', icon: GitBranch },
-  { id: 'runtime', label: 'Runtime', description: 'Live worker incidents', icon: Zap },
-  { id: 'improve', label: 'Improve', description: 'Feedback and ranks', icon: ThumbsUp },
-  { id: 'forget', label: 'Forget', description: 'Governance controls', icon: Trash2 },
-  { id: 'evals', label: 'Evals', description: 'Recall quality', icon: BarChart3 },
-  { id: 'settings', label: 'Settings', description: 'Runtime state', icon: Settings }
+const PRIMARY_NAV: NavItem[] = [
+  { id: 'home', label: 'Dashboard', description: '', icon: Home },
+  { id: 'overview', label: 'Incident', description: '', icon: LayoutDashboard },
+  { id: 'recall', label: 'Recall', description: '', icon: Brain },
+  { id: 'lineage', label: 'Lineage', description: '', icon: GitBranch },
+  { id: 'docs', label: 'Docs', description: '', icon: BookOpen }
 ]
 
+const TOOL_NAV: NavItem[] = [
+  { id: 'runtime', label: 'Runtime', description: '', icon: Zap },
+  { id: 'improve', label: 'Improve', description: '', icon: ThumbsUp },
+  { id: 'forget', label: 'Forget', description: '', icon: Trash2 },
+  { id: 'evals', label: 'Evals', description: '', icon: BarChart3 },
+  { id: 'settings', label: 'Settings', description: '', icon: Settings }
+]
+
+const NAV_ITEMS: NavItem[] = [...PRIMARY_NAV, ...TOOL_NAV]
+
+function activeFromRuntime(detail: RuntimeIncidentResult): ActiveIncident {
+  const tables = [...(detail.incident.source_tables ?? []), ...(detail.incident.target_tables ?? [])]
+  return {
+    id: detail.incident.incident_id,
+    dag: detail.incident.dag_id,
+    task: detail.incident.task_id,
+    error: detail.incident.failure_category,
+    category: detail.incident.failure_category,
+    table: tables[0],
+    blocked: tables[1],
+    source: 'runtime'
+  }
+}
+
 export function Dashboard() {
-  const [activeView, setActiveView] = useState<ViewId>('overview')
+  const [activeView, setActiveView] = useState<ViewId>('home')
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [question, setQuestion] = useState(DEFAULT_QUESTION)
   const [health, setHealth] = useState<Record<string, string | boolean> | null>(null)
   const [seed, setSeed] = useState<SeedResponse | null>(null)
   const [recall, setRecall] = useState<RecallResponse | null>(null)
   const [graph, setGraph] = useState<GraphPath | null>(null)
-  const [runbook, setRunbook] = useState<RunbookState | null>(null)
   const [improve, setImprove] = useState<ImproveResponse | null>(null)
   const [forget, setForget] = useState<ForgetResponse | null>(null)
   const [evalResult, setEvalResult] = useState<EvalResponse | null>(null)
   const [runtimeSummary, setRuntimeSummary] = useState<RuntimeSummary | null>(null)
   const [runtimeIncidents, setRuntimeIncidents] = useState<string[]>([])
+  const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null)
   const [runtimeDetail, setRuntimeDetail] = useState<RuntimeIncidentResult | null>(null)
   const [runtimeFormatted, setRuntimeFormatted] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busyAction, setBusyAction] = useState<BusyAction>('refresh')
+  const [selectedDocId, setSelectedDocId] = useState(DOCS.find((doc) => doc.kind === 'incident')?.id ?? DOCS[0]?.id ?? 'index.md')
 
+  const activeIncident: ActiveIncident = runtimeDetail ? activeFromRuntime(runtimeDetail) : SEED_INCIDENT
   const activeRanks = recall?.resolutions ?? []
   const accepted = activeRanks.find((rank) => rank.id === 'res-window-3-day')
   const topResolution = activeRanks[0]
@@ -134,54 +173,6 @@ export function Dashboard() {
   const isBusy = busyAction !== null
 
   const sourceCounts = useMemo(() => Object.entries(seed?.counts_by_source ?? {}), [seed])
-
-  const kpis = useMemo(
-    () => [
-      {
-        label: 'API',
-        value: String(health?.status ?? 'pending'),
-        detail: String(health?.service ?? 'AirMemory'),
-        tone: health?.status === 'ok' ? 'success' : 'muted'
-      },
-      {
-        label: 'Storage',
-        value: String(health?.storage ?? 'embedded'),
-        detail: 'memory backend',
-        tone: 'info'
-      },
-      {
-        label: 'Cognee',
-        value: health?.cognee_enabled ? 'Live Cognee' : 'Adapter mode',
-        detail: health?.cognee_enabled ? 'external memory' : 'local mirror',
-        tone: health?.cognee_enabled ? 'success' : 'warning'
-      },
-      {
-        label: 'Remembered',
-        value: seed ? `${seed.remembered}` : '0',
-        detail: seed?.dataset ?? 'airmemory',
-        tone: seed ? 'success' : 'muted'
-      },
-      {
-        label: 'Accepted rank',
-        value: accepted ? `#${accepted.rank}` : 'pending',
-        detail: accepted ? `score ${accepted.score.toFixed(2)}` : 'no recall yet',
-        tone: accepted?.rank === 1 ? 'success' : 'warning'
-      },
-      {
-        label: 'Leakage',
-        value: forget ? `${forget.leakage_check}` : deprecatedVisible ? 'visible' : 'pending',
-        detail: forget ? 'deprecated hits' : 'forget not run',
-        tone: forget?.leakage_check === 0 ? 'success' : deprecatedVisible ? 'danger' : 'muted'
-      },
-      {
-        label: 'Eval delta',
-        value: evalResult ? formatDelta(evalResult.after.recall_at_1 - evalResult.before.recall_at_1) : 'pending',
-        detail: 'warm recall @1',
-        tone: evalResult ? 'success' : 'muted'
-      }
-    ],
-    [accepted, deprecatedVisible, evalResult, forget, health, seed]
-  )
 
   const runAction = useCallback(async (action: Exclude<BusyAction, null>, work: () => Promise<void>) => {
     setBusyAction(action)
@@ -195,48 +186,81 @@ export function Dashboard() {
     }
   }, [])
 
+  const syncMemoryForIncident = useCallback(async (detail: RuntimeIncidentResult | null, nextQuestion?: string) => {
+    const recallQuestion = nextQuestion ?? (detail ? buildRecallQuestion(detail) : DEFAULT_QUESTION)
+    const runbookContext = detail ? buildRunbookContext(detail) : undefined
+    const dagId = detail?.incident.dag_id
+    const taskId = detail?.incident.task_id
+
+    const [recallResult, graphResult] = await Promise.all([
+      recallMemory({ question: recallQuestion, dagId, taskId }),
+      getGraph(dagId)
+    ])
+    await generateRunbook(runbookContext)
+
+    setQuestion(recallQuestion)
+    setRecall(recallResult)
+    setGraph(recallResult.graph_path ?? graphResult)
+  }, [])
+
   const refreshAll = useCallback(
     async (nextQuestion: string, action: Exclude<BusyAction, null> = 'refresh') => {
       await runAction(action, async () => {
-        const [healthResult, seedResult, recallResult, graphResult, runbookResult] = await Promise.all([
-          getHealth(),
-          seedAirMemory(),
-          recallMemory(nextQuestion),
-          getGraph(),
-          generateRunbook()
-        ])
+        const [healthResult, seedResult] = await Promise.all([getHealth(), seedAirMemory()])
         setHealth(healthResult)
         setSeed(seedResult)
-        setRecall(recallResult)
-        setGraph(recallResult.graph_path ?? graphResult)
-        setRunbook(runbookResult)
+        await syncMemoryForIncident(runtimeDetail, nextQuestion)
       })
     },
-    [runAction]
+    [runAction, runtimeDetail, syncMemoryForIncident]
   )
 
-  const loadRuntime = useCallback(async () => {
-    const [summary, incidents] = await Promise.all([getRuntimeSummary(), listRuntimeIncidents()])
-    setRuntimeSummary(summary)
-    setRuntimeIncidents(incidents.incident_ids)
-    if (incidents.incident_ids[0]) {
-      const detail = await getRuntimeIncident(incidents.incident_ids[0])
+  const loadRuntime = useCallback(
+    async (preferId?: string | null) => {
+      const [summary, incidents] = await Promise.all([getRuntimeSummary(), listRuntimeIncidents()])
+      setRuntimeSummary(summary)
+      setRuntimeIncidents(incidents.incident_ids)
+
+      const nextId = preferId && incidents.incident_ids.includes(preferId) ? preferId : incidents.incident_ids[0] ?? null
+      setSelectedIncidentId(nextId)
+
+      if (!nextId) {
+        setRuntimeDetail(null)
+        return null
+      }
+
+      const detail = await getRuntimeIncident(nextId)
       setRuntimeDetail(detail)
-    } else {
-      setRuntimeDetail(null)
-    }
-  }, [])
+      return detail
+    },
+    []
+  )
 
   const refreshRuntime = useCallback(async () => {
     await runAction('runtime', async () => {
-      await loadRuntime()
+      const detail = await loadRuntime(selectedIncidentId)
+      if (detail) {
+        await syncMemoryForIncident(detail)
+      }
     })
-  }, [loadRuntime, runAction])
+  }, [loadRuntime, runAction, selectedIncidentId, syncMemoryForIncident])
 
   useEffect(() => {
-    void refreshAll(DEFAULT_QUESTION)
-    void loadRuntime()
-  }, [refreshAll, loadRuntime])
+    void (async () => {
+      setBusyAction('refresh')
+      try {
+        setError(null)
+        const [healthResult, seedResult, detail] = await Promise.all([getHealth(), seedAirMemory(), loadRuntime()])
+        setHealth(healthResult)
+        setSeed(seedResult)
+        await syncMemoryForIncident(detail)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'refresh failed')
+      } finally {
+        setBusyAction(null)
+      }
+    })()
+  }, [loadRuntime, syncMemoryForIncident])
 
   function switchView(view: ViewId) {
     setActiveView(view)
@@ -257,8 +281,24 @@ export function Dashboard() {
   function submitImprove() {
     setActiveView('improve')
     void runAction('improve', async () => {
-      const improved = await improveMemory('Confirmed the 3 day processing_date window resolved the incident.')
-      const recalled = await recallMemory(question)
+      const feedbackIncidentId =
+        activeIncident.source === 'runtime' && runtimeDetail?.similar_incidents[0]?.incident_id
+          ? runtimeDetail.similar_incidents[0].incident_id
+          : 'INC-1029'
+
+      const improved = await improveMemory({
+        incidentId: feedbackIncidentId,
+        feedback:
+          activeIncident.source === 'runtime'
+            ? `Confirmed runtime advice for ${activeIncident.id}: ${runtimeDetail?.advice.recommended_fix ?? 'accepted fix'}`
+            : 'Confirmed the 3 day processing_date window resolved the incident.',
+        acceptedResolution: 'res-window-3-day'
+      })
+      const recalled = await recallMemory({
+        question,
+        dagId: activeIncident.dag,
+        taskId: activeIncident.task
+      })
       setImprove(improved)
       setRecall(recalled)
       if (recalled.graph_path) {
@@ -271,7 +311,11 @@ export function Dashboard() {
     setActiveView('forget')
     void runAction('forget', async () => {
       const forgotten = await forgetDeprecated()
-      const recalled = await recallMemory(question)
+      const recalled = await recallMemory({
+        question,
+        dagId: activeIncident.dag,
+        taskId: activeIncident.task
+      })
       setForget(forgotten)
       setRecall(recalled)
       if (recalled.graph_path) {
@@ -289,33 +333,47 @@ export function Dashboard() {
   }
 
   function emitAndProcessRuntime() {
-    setActiveView('runtime')
+    setActiveView('home')
     void runAction('runtime', async () => {
       await emitRuntimeFailure()
       const processed = await processRuntimeFailure()
       setRuntimeFormatted(processed.formatted)
-      if (processed.result) {
+      const nextId = processed.result?.incident.incident_id ?? null
+      const detail = await loadRuntime(nextId)
+      if (detail) {
+        await syncMemoryForIncident(detail)
+      } else if (processed.result) {
         setRuntimeDetail(processed.result)
+        setSelectedIncidentId(processed.result.incident.incident_id)
+        await syncMemoryForIncident(processed.result)
       }
-      await refreshRuntime()
     })
   }
 
-  function loadRuntimeIncident(incidentId: string) {
+  function selectRuntimeIncident(incidentId: string) {
     void runAction('runtime', async () => {
+      setSelectedIncidentId(incidentId)
       const detail = await getRuntimeIncident(incidentId)
       setRuntimeDetail(detail)
+      await syncMemoryForIncident(detail)
     })
   }
 
   return (
-    <div className="min-h-screen bg-bg text-text">
-      <div className="lg:grid lg:grid-cols-[248px_minmax(0,1fr)]">
-        <ControlNav activeView={activeView} onSelect={switchView} />
-        <MobileNav open={mobileNavOpen} activeView={activeView} onClose={() => setMobileNavOpen(false)} onSelect={switchView} />
+    <div className="min-h-screen overflow-x-hidden bg-bg text-text">
+      <div className="lg:grid lg:grid-cols-[220px_minmax(0,1fr)]">
+        <ControlNav activeIncident={activeIncident} activeView={activeView} onSelect={switchView} />
+        <MobileNav
+          activeIncident={activeIncident}
+          open={mobileNavOpen}
+          activeView={activeView}
+          onClose={() => setMobileNavOpen(false)}
+          onSelect={switchView}
+        />
 
-        <main className="min-w-0 px-4 pb-10 pt-4 sm:px-6 lg:px-10">
+        <main className="min-w-0 overflow-x-hidden px-4 pb-14 pt-6 sm:px-6 lg:px-10">
           <CommandBar
+            activeIncident={activeIncident}
             activeView={activeView}
             busyAction={busyAction}
             isBusy={isBusy}
@@ -328,33 +386,56 @@ export function Dashboard() {
           />
 
           {error ? (
-            <div role="alert" className="mb-4 flex items-start gap-3 rounded-[6px] border border-danger/50 bg-danger/10 p-3 text-sm text-danger">
+            <div role="alert" className="mb-4 flex items-start gap-3 rounded-control border border-danger/50 bg-danger/10 p-3 text-sm text-danger">
               <AlertTriangle className="mt-0.5 shrink-0" size={16} />
               <span className="min-w-0 break-words">{error}</span>
             </div>
           ) : null}
 
-          <KpiStrip items={kpis} />
-
           <div className="mt-5">
-            {activeView === 'overview' ? (
-              <OverviewView
-                accepted={accepted}
-                graph={graphForDisplay}
+            {activeView === 'home' ? (
+              <HomeDashboard
+                activeIncident={activeIncident}
                 isBusy={isBusy}
                 recall={recall}
-                runbook={runbook}
+                runtimeDetail={runtimeDetail}
+                seed={seed}
+                summary={runtimeSummary}
+                onEmitAndProcess={emitAndProcessRuntime}
+                onOpenLineage={askDownstream}
+                onOpenOverview={() => switchView('overview')}
+                onOpenRecall={askCurrent}
+                onOpenDocs={(docId) => {
+                  setSelectedDocId(docId ?? 'incidents/inc_1029.md')
+                  switchView('docs')
+                }}
+              />
+            ) : null}
+
+            {activeView === 'overview' ? (
+              <OverviewView
+                activeIncident={activeIncident}
+                accepted={accepted}
+                graph={graphForDisplay}
+                incidentIds={runtimeIncidents}
+                isBusy={isBusy}
+                recall={recall}
+                runtimeDetail={runtimeDetail}
+                selectedIncidentId={selectedIncidentId}
+                summary={runtimeSummary}
                 topResolution={topResolution}
                 onDownstream={askDownstream}
-                onEval={submitEval}
-                onForget={submitForget}
+                onEmitAndProcess={emitAndProcessRuntime}
                 onImprove={submitImprove}
                 onRecall={askCurrent}
+                onRefreshRuntime={refreshRuntime}
+                onSelectIncident={selectRuntimeIncident}
               />
             ) : null}
 
             {activeView === 'recall' ? (
               <RecallView
+                activeIncident={activeIncident}
                 activeRanks={activeRanks}
                 isBusy={isBusy}
                 question={question}
@@ -368,21 +449,39 @@ export function Dashboard() {
               <LineageView graph={graphForDisplay} recall={recall} onDownstream={askDownstream} isBusy={isBusy} />
             ) : null}
 
+            {activeView === 'docs' ? (
+              <DocsView
+                activeIncidentId={activeIncident.id}
+                selectedDocId={selectedDocId}
+                onSelectDoc={setSelectedDocId}
+              />
+            ) : null}
+
             {activeView === 'runtime' ? (
               <RuntimeView
+                activeIncident={activeIncident}
                 formatted={runtimeFormatted}
                 incidentIds={runtimeIncidents}
                 isBusy={isBusy}
                 runtimeDetail={runtimeDetail}
+                selectedIncidentId={selectedIncidentId}
                 summary={runtimeSummary}
                 onEmitAndProcess={emitAndProcessRuntime}
                 onRefresh={refreshRuntime}
-                onSelectIncident={loadRuntimeIncident}
+                onSelectIncident={selectRuntimeIncident}
               />
             ) : null}
 
             {activeView === 'improve' ? (
-              <ImproveView accepted={accepted} improve={improve} isBusy={isBusy} onImprove={submitImprove} ranks={activeRanks} />
+              <ImproveView
+                activeIncident={activeIncident}
+                accepted={accepted}
+                improve={improve}
+                isBusy={isBusy}
+                onImprove={submitImprove}
+                ranks={activeRanks}
+                runtimeDetail={runtimeDetail}
+              />
             ) : null}
 
             {activeView === 'forget' ? (
@@ -394,7 +493,7 @@ export function Dashboard() {
             ) : null}
 
             {activeView === 'settings' ? (
-              <SettingsView health={health} seed={seed} sourceCounts={sourceCounts} />
+              <SettingsView health={health} seed={seed} sourceCounts={sourceCounts} summary={runtimeSummary} />
             ) : null}
           </div>
         </main>
@@ -403,33 +502,44 @@ export function Dashboard() {
   )
 }
 
-function ControlNav({ activeView, onSelect }: { activeView: ViewId; onSelect: (view: ViewId) => void }) {
+function ControlNav({
+  activeIncident,
+  activeView,
+  onSelect
+}: {
+  activeIncident: ActiveIncident
+  activeView: ViewId
+  onSelect: (view: ViewId) => void
+}) {
   return (
-    <aside className="sticky top-0 hidden h-screen border-r border-border bg-panel px-4 py-5 lg:block">
+    <aside className="sticky top-0 hidden h-screen border-r border-border bg-sidebar px-3 py-6 lg:block">
       <BrandBlock />
-      <nav aria-label="Control plane" className="mt-7 grid gap-1">
-        {NAV_ITEMS.map((item) => (
+      <nav aria-label="Primary" className="mt-10 grid gap-0.5">
+        {PRIMARY_NAV.map((item) => (
           <NavButton key={item.id} item={item} active={activeView === item.id} onSelect={onSelect} />
         ))}
       </nav>
-      <div className="absolute bottom-5 left-4 right-4 rounded-[6px] border border-border bg-bg p-3">
-        <div className="flex items-center gap-2 text-xs font-medium text-muted">
-          <Zap size={14} className="text-text" />
-          Active incident
-        </div>
-        <p className="mt-2 font-mono text-sm text-text">{INCIDENT.id}</p>
-        <p className="mt-1 text-xs leading-5 text-muted">{INCIDENT.error}</p>
+      <p className="mb-2 mt-10 px-2 text-[10px] font-medium uppercase tracking-[0.16em] text-muted">Tools</p>
+      <nav aria-label="Tools" className="grid gap-0.5">
+        {TOOL_NAV.map((item) => (
+          <NavButton key={item.id} item={item} active={activeView === item.id} onSelect={onSelect} />
+        ))}
+      </nav>
+      <div className="absolute bottom-6 left-3 right-3 border-t border-border pt-4">
+        <p className="truncate font-mono text-[11px] text-muted">{activeIncident.id}</p>
       </div>
     </aside>
   )
 }
 
 function MobileNav({
+  activeIncident,
   activeView,
   onClose,
   onSelect,
   open
 }: {
+  activeIncident: ActiveIncident
   activeView: ViewId
   onClose: () => void
   onSelect: (view: ViewId) => void
@@ -441,17 +551,24 @@ function MobileNav({
 
   return (
     <div className="fixed inset-0 z-50 lg:hidden">
-      <button type="button" aria-label="Close navigation overlay" className="absolute inset-0 bg-black/20" onClick={onClose} />
-      <aside className="relative flex h-full w-[min(320px,calc(100vw-40px))] flex-col border-r border-border bg-panel p-4 shadow-xl shadow-black/10">
+      <button type="button" aria-label="Close navigation overlay" className="absolute inset-0 bg-black/60" onClick={onClose} />
+      <aside className="relative flex h-full w-[min(320px,calc(100vw-40px))] flex-col border-r border-border bg-sidebar p-4 shadow-glow">
         <div className="flex items-start justify-between gap-3">
           <BrandBlock />
           <IconOnlyButton title="Close navigation" icon={<X size={18} />} onClick={onClose} />
         </div>
-        <nav aria-label="Mobile control plane" className="mt-6 grid gap-1">
-          {NAV_ITEMS.map((item) => (
+        <nav aria-label="Mobile primary" className="mt-6 grid gap-0.5">
+          {PRIMARY_NAV.map((item) => (
             <NavButton key={item.id} item={item} active={activeView === item.id} onSelect={onSelect} />
           ))}
         </nav>
+        <p className="mb-2 mt-6 px-2 text-[10px] font-medium uppercase tracking-[0.14em] text-muted">Tools</p>
+        <nav aria-label="Mobile tools" className="grid gap-0.5">
+          {TOOL_NAV.map((item) => (
+            <NavButton key={item.id} item={item} active={activeView === item.id} onSelect={onSelect} />
+          ))}
+        </nav>
+        <p className="mt-auto px-2 font-mono text-xs text-muted">{activeIncident.id}</p>
       </aside>
     </div>
   )
@@ -459,10 +576,16 @@ function MobileNav({
 
 function BrandBlock() {
   return (
-    <div>
-      <h1 className="text-xl font-semibold tracking-normal text-text">AirMemory</h1>
-      <p className="mt-1 text-sm text-muted">Memory control plane</p>
-      <p className="mt-4 max-w-[210px] text-xs leading-5 text-muted">Recall incidents, inspect lineage, and keep memory clean.</p>
+    <div className="flex items-center gap-2.5 px-2">
+      <span className="grid h-6 w-6 place-items-center rounded-md bg-accent/15 text-[11px] font-semibold text-accent-strong">
+        A
+      </span>
+      <div className="min-w-0">
+        <h1 className="text-[15px] font-semibold tracking-[-0.02em] text-text">AirMemory</h1>
+        {isDemoMode ? (
+          <p className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-muted">Demo</p>
+        ) : null}
+      </div>
     </div>
   )
 }
@@ -477,17 +600,14 @@ function NavButton({ active, item, onSelect }: { active: boolean; item: NavItem;
       className={active ? 'nav-item nav-item-active' : 'nav-item'}
       aria-current={active ? 'page' : undefined}
     >
-      <Icon size={18} className="shrink-0" />
-      <span className="min-w-0 text-left">
-        <span className="block text-sm font-medium">{item.label}</span>
-        <span className="block truncate text-[11px] text-muted">{item.description}</span>
-      </span>
-      <ChevronRight size={14} className="ml-auto shrink-0 opacity-60" />
+      <Icon size={16} className="shrink-0 opacity-80" />
+      <span className="text-sm">{item.label}</span>
     </button>
   )
 }
 
 function CommandBar({
+  activeIncident,
   activeView,
   busyAction,
   isBusy,
@@ -498,6 +618,7 @@ function CommandBar({
   question,
   seed
 }: {
+  activeIncident: ActiveIncident
   activeView: ViewId
   busyAction: BusyAction
   isBusy: boolean
@@ -509,154 +630,178 @@ function CommandBar({
   seed: SeedResponse | null
 }) {
   const currentView = NAV_ITEMS.find((item) => item.id === activeView)
+  const isHome = activeView === 'home'
+
+  if (isHome) {
+    return (
+      <header className="mb-2 flex items-center gap-3 lg:hidden">
+        <IconOnlyButton title="Open navigation" icon={<Menu size={18} />} onClick={onMenu} />
+        <p className="text-sm text-muted">AirMemory</p>
+      </header>
+    )
+  }
 
   return (
-    <header className="sticky top-0 z-30 -mx-4 mb-5 border-b border-border bg-panel/85 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-10 lg:px-10">
-      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(420px,0.9fr)_auto] xl:items-center">
-        <div className="flex min-w-0 items-center gap-3">
-          <IconOnlyButton className="lg:hidden" title="Open navigation" icon={<Menu size={18} />} onClick={onMenu} />
-          <div className="min-w-0">
-            <p className="text-xs font-medium text-muted">{currentView?.description ?? 'Control plane'}</p>
-            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-              <h2 className="text-2xl font-semibold tracking-normal text-text">{currentView?.label ?? 'Overview'}</h2>
-              <span className="rounded-[6px] border border-border bg-surface2 px-2 py-1 font-mono text-[11px] text-muted">{INCIDENT.id}</span>
-              <span className="min-w-0 truncate text-xs text-muted">{seed?.dataset ?? 'airmemory'} dataset</span>
-            </div>
-          </div>
-        </div>
-
-        <label className="flex min-h-11 min-w-0 items-center gap-2 rounded-[6px] border border-border bg-panel px-3 focus-within:border-zinc-400">
-          <Search size={16} className="shrink-0 text-muted" />
-          <span className="sr-only">Memory question</span>
-          <input
-            value={question}
-            onChange={(event) => onQuestionChange(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') {
-                event.preventDefault()
-                onRecall()
-              }
-            }}
-            className="min-w-0 flex-1 bg-transparent py-2 text-sm text-text outline-none placeholder:text-muted"
-          />
-        </label>
-
-        <div className="grid grid-cols-2 gap-2 sm:flex">
-          <ActionButton title={busyAction === 'recall' ? 'Recalling' : 'Recall'} icon={<Play size={15} />} onClick={onRecall} disabled={isBusy} />
-          <ActionButton
-            title={busyAction === 'refresh' ? 'Refreshing' : 'Refresh'}
-            icon={<RefreshCw size={15} className={busyAction === 'refresh' ? 'animate-spin' : undefined} />}
-            onClick={onRefresh}
-            disabled={isBusy}
-            tone="secondary"
-          />
+    <header className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
+      <div className="flex min-w-0 items-center gap-3">
+        <IconOnlyButton className="lg:hidden" title="Open navigation" icon={<Menu size={18} />} onClick={onMenu} />
+        <div className="min-w-0">
+          <h2 className="text-xl font-semibold tracking-tight text-text">{currentView?.label ?? 'Incident'}</h2>
+          <p className="mt-0.5 truncate font-mono text-xs text-muted">
+            {activeIncident.id} · {activeIncident.dag}
+          </p>
         </div>
       </div>
-    </header>
-  )
-}
 
-function KpiStrip({
-  items
-}: {
-  items: Array<{ label: string; value: string; detail: string; tone: string }>
-}) {
-  return (
-    <section aria-label="Runtime KPIs" className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-7">
-      {items.map((item) => (
-        <div key={item.label} className="rounded-[6px] border border-border bg-panel px-3 py-3">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-xs font-medium text-muted">{item.label}</p>
-            <span className={toneDotClass(item.tone)} />
-          </div>
-          <p className="mt-2 truncate text-sm font-medium text-text" title={item.value}>
-            {item.value}
-          </p>
-          <p className="mt-1 truncate text-xs text-muted" title={item.detail}>
-            {item.detail}
-          </p>
+      {activeView === 'recall' ? (
+        <div className="flex min-w-0 flex-1 items-center gap-2 sm:max-w-xl sm:justify-end">
+          <label className="flex min-h-9 min-w-0 flex-1 items-center gap-2 rounded-control border border-border bg-panel px-3 focus-within:border-accent/50">
+            <Search size={15} className="shrink-0 text-muted" />
+            <span className="sr-only">Memory question</span>
+            <input
+              value={question}
+              onChange={(event) => onQuestionChange(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  onRecall()
+                }
+              }}
+              className="min-w-0 flex-1 bg-transparent py-1.5 text-sm text-text outline-none"
+            />
+          </label>
+          <ActionButton title={busyAction === 'recall' ? '...' : 'Ask'} icon={<Play size={14} />} onClick={onRecall} disabled={isBusy} />
         </div>
-      ))}
-    </section>
+      ) : (
+        <ActionButton
+          title={busyAction === 'refresh' ? '...' : 'Refresh'}
+          icon={<RefreshCw size={14} className={busyAction === 'refresh' ? 'animate-spin' : undefined} />}
+          onClick={onRefresh}
+          disabled={isBusy}
+          tone="secondary"
+        />
+      )}
+      <span className="sr-only">{seed?.dataset}</span>
+    </header>
   )
 }
 
 function OverviewView({
   accepted,
+  activeIncident,
   graph,
+  incidentIds,
   isBusy,
   onDownstream,
-  onEval,
-  onForget,
+  onEmitAndProcess,
   onImprove,
   onRecall,
+  onRefreshRuntime,
+  onSelectIncident,
   recall,
-  runbook,
+  runtimeDetail,
+  selectedIncidentId,
+  summary,
   topResolution
 }: {
   accepted?: ResolutionRank
+  activeIncident: ActiveIncident
   graph: GraphPath | null
+  incidentIds: string[]
   isBusy: boolean
   onDownstream: () => void
-  onEval: () => void
-  onForget: () => void
+  onEmitAndProcess: () => void
   onImprove: () => void
   onRecall: () => void
+  onRefreshRuntime: () => void
+  onSelectIncident: (incidentId: string) => void
   recall: RecallResponse | null
-  runbook: RunbookState | null
+  runtimeDetail: RuntimeIncidentResult | null
+  selectedIncidentId: string | null
+  summary: RuntimeSummary | null
   topResolution?: ResolutionRank
 }) {
   return (
-    <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(380px,0.95fr)]">
-      <div className="grid min-w-0 gap-4">
-        <Panel title="Current failure" icon={<Activity size={17} />} action={<StatusPill tone="danger">blocked</StatusPill>}>
-          <MetricGrid>
-            <Metric label="DAG" value={INCIDENT.dag} mono />
-            <Metric label="Task" value={INCIDENT.task} mono />
-            <Metric label="Error" value={INCIDENT.error} tone="danger" mono />
-            <Metric label="Counts" value={INCIDENT.counts} mono />
-            <Metric label="Blocked" value={INCIDENT.blocked} mono />
-          </MetricGrid>
-          <div className="mt-4 grid gap-2 sm:grid-cols-4">
-            <ActionButton title="Recall" icon={<Brain size={15} />} onClick={onRecall} disabled={isBusy} />
-            <ActionButton title="Lineage" icon={<GitBranch size={15} />} onClick={onDownstream} disabled={isBusy} tone="secondary" />
-            <ActionButton title="Improve" icon={<ThumbsUp size={15} />} onClick={onImprove} disabled={isBusy} tone="secondary" />
-            <ActionButton title="Run eval" icon={<BarChart3 size={15} />} onClick={onEval} disabled={isBusy} tone="secondary" />
-          </div>
-        </Panel>
-
-        <Panel title="Latest recalled memory" icon={<ShieldCheck size={17} />}>
-          <AnswerText answer={recall?.answer} />
-          <CitationLedger citations={recall?.citations ?? []} compact />
-        </Panel>
-
-        <Panel title="Lineage snapshot" icon={<GitBranch size={17} />}>
-          <LineageGraph graph={graph} />
-          <PathSummary graph={graph} contrast={recall?.vector_only_contrast} />
-        </Panel>
-      </div>
-
-      <div className="grid min-w-0 content-start gap-4">
-        <Panel title="Top resolution" icon={<CheckCircle2 size={17} />}>
-          <ResolutionHighlight accepted={accepted} topResolution={topResolution} />
-        </Panel>
-
-        <Panel title="Runbook preview" icon={<BookOpen size={17} />}>
-          <RunbookPreview runbook={runbook} />
-        </Panel>
-
-        <Panel title="Governance" icon={<Trash2 size={17} />}>
-          <p className="text-sm leading-6 text-muted">
-            Deprecated broad DAG clears remain visible until a forget action removes the deprecated dataset and verifies zero leakage.
+    <div className="mx-auto grid w-full max-w-3xl min-w-0 gap-6">
+      <section className="premium-card min-w-0 p-6 sm:p-7">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="flex items-center gap-2 text-[13px] text-muted">
+            <span
+              className={`inline-flex items-center gap-1.5 text-[11px] font-medium ${
+                activeIncident.source === 'runtime' ? 'text-success' : 'text-warning'
+              }`}
+            >
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${
+                  activeIncident.source === 'runtime' ? 'bg-success' : 'bg-warning'
+                }`}
+              />
+              {activeIncident.source === 'runtime' ? 'Live' : 'Seed'}
+            </span>
+            <span className="text-border-strong">·</span>
+            <span className="font-mono text-[12px]">{activeIncident.error}</span>
           </p>
-          <ActionButton className="mt-4 w-full" title="Review forget control" icon={<Trash2 size={15} />} onClick={onForget} disabled={isBusy} tone="secondary" />
-        </Panel>
-      </div>
+          <ActionButton title="Emit" icon={<Zap size={14} />} onClick={onEmitAndProcess} disabled={isBusy} />
+        </div>
+
+        <h3 className="mt-5 break-words text-xl font-semibold tracking-[-0.025em] text-text">{activeIncident.task}</h3>
+        <p className="mt-1.5 break-all font-mono text-[11px] text-muted">{activeIncident.dag}</p>
+
+        <div className="mt-5 space-y-3 text-sm leading-6 text-muted">
+          {runtimeDetail ? (
+            <>
+              <p>{runtimeDetail.advice.likely_root_cause}</p>
+              <p className="text-text">{runtimeDetail.advice.recommended_fix}</p>
+            </>
+          ) : (
+            <AnswerText answer={recall?.answer} />
+          )}
+        </div>
+
+        <div className="mt-6 flex flex-wrap gap-2">
+          <ActionButton title="Recall" icon={<Brain size={14} />} onClick={onRecall} disabled={isBusy} tone="secondary" />
+          <ActionButton title="Lineage" icon={<GitBranch size={14} />} onClick={onDownstream} disabled={isBusy} tone="secondary" />
+          <ActionButton title="Confirm" icon={<ThumbsUp size={14} />} onClick={onImprove} disabled={isBusy} tone="secondary" />
+        </div>
+      </section>
+
+      {runtimeDetail?.similar_incidents?.[0] ? (
+        <section className="min-w-0 px-1">
+          <p className="text-xs text-muted">Closest match</p>
+          <p className="mt-1 break-all font-mono text-sm text-text">{runtimeDetail.similar_incidents[0].incident_id}</p>
+        </section>
+      ) : null}
+
+      {incidentIds.length ? (
+        <section className="premium-card min-w-0 p-5">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h3 className="text-sm font-semibold text-text">Inbox</h3>
+            <button type="button" className="text-xs text-muted hover:text-text" onClick={onRefreshRuntime} disabled={isBusy}>
+              Refresh
+            </button>
+          </div>
+          <IncidentInbox incidentIds={incidentIds} selectedIncidentId={selectedIncidentId} onSelect={onSelectIncident} />
+          {summary ? <p className="mt-3 text-xs text-muted">{summary.queue_mode} · {summary.incident_count}</p> : null}
+        </section>
+      ) : null}
+
+      <section className="premium-card min-w-0 p-5">
+        <h3 className="mb-3 text-sm font-semibold text-text">Lineage</h3>
+        <LineageGraph graph={graph} />
+      </section>
+
+      {accepted || topResolution ? (
+        <section className="min-w-0 px-1">
+          <p className="text-xs text-muted">Top fix</p>
+          <p className="mt-1 text-sm text-text">{(accepted ?? topResolution)?.title}</p>
+        </section>
+      ) : null}
     </div>
   )
 }
 
 function RecallView({
+  activeIncident,
   activeRanks,
   isBusy,
   onQuestionChange,
@@ -664,6 +809,7 @@ function RecallView({
   question,
   recall
 }: {
+  activeIncident: ActiveIncident
   activeRanks: ResolutionRank[]
   isBusy: boolean
   onQuestionChange: (value: string) => void
@@ -675,12 +821,16 @@ function RecallView({
     <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
       <div className="grid min-w-0 gap-4">
         <Panel title="Ask memory" icon={<Brain size={17} />}>
-          <label className="block">
+          <MetricGrid>
+            <Metric label="Context DAG" value={activeIncident.dag} mono />
+            <Metric label="Context task" value={activeIncident.task} mono />
+          </MetricGrid>
+          <label className="mt-4 block">
             <span className="mb-2 block text-xs font-medium text-muted">Question</span>
             <textarea
               value={question}
               onChange={(event) => onQuestionChange(event.target.value)}
-              className="min-h-32 w-full resize-y rounded-[6px] border border-border bg-panel p-3 text-sm leading-6 text-text outline-none focus:border-zinc-400"
+              className="min-h-32 w-full resize-y rounded-control border border-border bg-panel p-3 text-sm leading-6 text-text outline-none focus:border-accent/50"
             />
           </label>
           <div className="mt-3 flex flex-wrap gap-2">
@@ -735,31 +885,112 @@ function LineageView({
   )
 }
 
+function DocsView({
+  activeIncidentId,
+  onSelectDoc,
+  selectedDocId
+}: {
+  activeIncidentId: string
+  onSelectDoc: (id: string) => void
+  selectedDocId: string
+}) {
+  const selected = getDoc(selectedDocId)
+  const groups: DocKind[] = ['incident', 'runbook', 'pattern', 'index']
+  const relatedHint =
+    activeIncidentId.toLowerCase().includes('1029') || activeIncidentId.toLowerCase().includes('demo')
+      ? 'incidents/inc_1029.md'
+      : null
+
+  return (
+    <div className="mx-auto grid w-full max-w-5xl min-w-0 gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
+      <aside className="premium-card min-w-0 p-4">
+        <p className="mb-4 text-[11px] font-medium uppercase tracking-[0.14em] text-muted">Library</p>
+        <div className="grid gap-5">
+          {groups.map((kind) => {
+            const items = listDocs(kind)
+            if (!items.length) return null
+            return (
+              <div key={kind}>
+                <p className="mb-2 text-[11px] font-medium text-muted">{DOC_KIND_LABEL[kind]}</p>
+                <div className="grid gap-0.5">
+                  {items.map((doc) => (
+                    <button
+                      key={doc.id}
+                      type="button"
+                      onClick={() => onSelectDoc(doc.id)}
+                      className={
+                        selectedDocId === doc.id
+                          ? 'rounded-control bg-surface px-2.5 py-2 text-left text-[13px] text-text'
+                          : 'rounded-control px-2.5 py-2 text-left text-[13px] text-muted hover:bg-surface hover:text-text'
+                      }
+                    >
+                      <span className="line-clamp-2">{doc.title.replace(/^#\s*/, '')}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+        {relatedHint ? (
+          <button
+            type="button"
+            onClick={() => onSelectDoc(relatedHint)}
+            className="mt-5 w-full border-t border-border pt-4 text-left text-[12px] text-accent-strong hover:text-accent"
+          >
+            Open write-up for {activeIncidentId} →
+          </button>
+        ) : null}
+      </aside>
+
+      <section className="premium-card min-w-0 p-6 sm:p-8">
+        <div className="mb-6 flex flex-wrap items-center gap-2 border-b border-border pb-4">
+          <BookOpen size={15} className="text-muted" />
+          <p className="font-mono text-[11px] text-muted">{selected.id}</p>
+        </div>
+        <MarkdownDoc source={selected.body} />
+      </section>
+    </div>
+  )
+}
+
 function ImproveView({
   accepted,
+  activeIncident,
   improve,
   isBusy,
   onImprove,
-  ranks
+  ranks,
+  runtimeDetail
 }: {
   accepted?: ResolutionRank
+  activeIncident: ActiveIncident
   improve: ImproveResponse | null
   isBusy: boolean
   onImprove: () => void
   ranks: ResolutionRank[]
+  runtimeDetail: RuntimeIncidentResult | null
 }) {
+  const feedbackTarget =
+    runtimeDetail?.similar_incidents[0]?.incident_id ?? (activeIncident.source === 'seed' ? activeIncident.id : 'INC-1029')
+
   return (
     <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
       <Panel title="Feedback control" icon={<ThumbsUp size={17} />}>
         <MetricGrid>
-          <Metric label="Incident" value={INCIDENT.id} mono />
+          <Metric label="Active incident" value={activeIncident.id} mono />
+          <Metric label="Feedback target" value={feedbackTarget} mono />
           <Metric label="Accepted fix" value="res-window-3-day" mono />
           <Metric label="Current rank" value={accepted ? `#${accepted.rank}` : 'pending'} tone={accepted?.rank === 1 ? 'success' : 'warning'} mono />
           <Metric label="Current score" value={accepted ? accepted.score.toFixed(2) : 'pending'} mono />
         </MetricGrid>
-        <div className="mt-4 rounded-[6px] border border-border bg-bg p-3">
+        <div className="mt-4 rounded-control border border-border bg-bg p-3">
           <p className="text-xs font-medium text-muted">Feedback payload</p>
-          <p className="mt-2 font-mono text-sm leading-6 text-text">Confirmed the 3 day processing_date window resolved the incident.</p>
+          <p className="mt-2 font-mono text-sm leading-6 text-text">
+            {activeIncident.source === 'runtime'
+              ? `Confirmed runtime advice for ${activeIncident.id}: ${runtimeDetail?.advice.recommended_fix ?? 'accepted fix'}`
+              : 'Confirmed the 3 day processing_date window resolved the incident.'}
+          </p>
         </div>
         <ActionButton className="mt-4" title="Confirm fix and improve ranking" icon={<ThumbsUp size={15} />} onClick={onImprove} disabled={isBusy} />
       </Panel>
@@ -802,7 +1033,7 @@ function ForgetView({
           <Metric label="Deprecated visible" value={deprecatedVisible ? 'yes' : 'no'} tone={deprecatedVisible ? 'danger' : 'success'} mono />
           <Metric label="Leakage check" value={forget ? `${forget.leakage_check}` : 'pending'} tone={forget?.leakage_check === 0 ? 'success' : 'muted'} mono />
         </MetricGrid>
-        <div className="mt-4 rounded-[6px] border border-warning/20 bg-amber-50 p-3 text-sm leading-6 text-warning">
+        <div className="mt-4 rounded-control border border-warning/20 bg-warning/10 p-3 text-sm leading-6 text-warning">
           This removes the deprecated workaround from retrieval. It does not run or clear any Airflow task.
         </div>
         <ActionButton className="mt-4" title="Remove deprecated workaround" icon={<Trash2 size={15} />} onClick={onForget} disabled={isBusy} tone="danger" />
@@ -842,6 +1073,7 @@ function EvalsView({ evalResult, isBusy, onEval }: { evalResult: EvalResponse | 
 }
 
 function RuntimeView({
+  activeIncident,
   formatted,
   incidentIds,
   isBusy,
@@ -849,8 +1081,10 @@ function RuntimeView({
   onRefresh,
   onSelectIncident,
   runtimeDetail,
+  selectedIncidentId,
   summary
 }: {
+  activeIncident: ActiveIncident
   formatted: string | null
   incidentIds: string[]
   isBusy: boolean
@@ -858,6 +1092,7 @@ function RuntimeView({
   onRefresh: () => void
   onSelectIncident: (incidentId: string) => void
   runtimeDetail: RuntimeIncidentResult | null
+  selectedIncidentId: string | null
   summary: RuntimeSummary | null
 }) {
   return (
@@ -866,7 +1101,7 @@ function RuntimeView({
         <MetricGrid>
           <Metric label="Queue mode" value={summary?.queue_mode ?? 'pending'} mono />
           <Metric label="Processed incidents" value={summary ? `${summary.incident_count}` : '0'} mono />
-          <Metric label="Latest incident" value={summary?.latest_incident_id ?? 'none'} mono />
+          <Metric label="Active incident" value={activeIncident.id} mono />
           <Metric label="Latest summary" value={summary?.latest_summary ?? 'No processed incidents yet'} />
         </MetricGrid>
         <div className="mt-4 flex flex-wrap gap-2">
@@ -874,31 +1109,23 @@ function RuntimeView({
           <ActionButton title="Refresh runtime inbox" icon={<RefreshCw size={15} />} onClick={onRefresh} disabled={isBusy} />
         </div>
         {formatted ? (
-          <pre className="mt-4 max-h-[280px] min-w-0 overflow-auto whitespace-pre-wrap break-words rounded-[6px] border border-border bg-bg p-3 font-mono text-xs leading-6 text-text">
+          <pre className="mt-4 max-h-[280px] min-w-0 overflow-auto whitespace-pre-wrap break-words rounded-control border border-border bg-bg p-3 font-mono text-xs leading-6 text-text">
             {formatted}
           </pre>
+        ) : null}
+        {runtimeDetail?.cognee_recall_text ? (
+          <div className="mt-4">
+            <p className="mb-2 text-xs font-medium text-muted">Cognee evidence</p>
+            <pre className="max-h-[220px] overflow-auto whitespace-pre-wrap break-words rounded-control border border-border bg-bg p-3 font-mono text-xs leading-6 text-muted">
+              {runtimeDetail.cognee_recall_text}
+            </pre>
+          </div>
         ) : null}
       </Panel>
 
       <div className="grid min-w-0 content-start gap-4">
         <Panel title="Incident inbox" icon={<Activity size={17} />}>
-          {incidentIds.length ? (
-            <div className="grid gap-2">
-              {incidentIds.map((incidentId) => (
-                <button
-                  key={incidentId}
-                  type="button"
-                  className="flex min-h-11 items-center justify-between gap-3 rounded-[6px] border border-border bg-panel px-3 py-2 text-left text-sm hover:bg-surface2"
-                  onClick={() => onSelectIncident(incidentId)}
-                >
-                  <span className="min-w-0 truncate font-mono text-text">{incidentId}</span>
-                  <ChevronRight size={16} className="shrink-0 text-muted" />
-                </button>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-muted">No runtime incidents yet. Emit and process a demo failure to populate the inbox.</p>
-          )}
+          <IncidentInbox incidentIds={incidentIds} selectedIncidentId={selectedIncidentId} onSelect={onSelectIncident} />
         </Panel>
 
         <Panel title="Selected incident" icon={<CheckCircle2 size={17} />}>
@@ -918,6 +1145,16 @@ function RuntimeView({
               {runtimeDetail.advice.rejected_fix_warning ? (
                 <p className="text-danger">{runtimeDetail.advice.rejected_fix_warning}</p>
               ) : null}
+              {runtimeDetail.similar_incidents.length ? (
+                <div className="border-t border-border pt-3">
+                  <p className="mb-2 text-xs font-medium text-muted">Similar matches</p>
+                  {runtimeDetail.similar_incidents.map((match) => (
+                    <p key={match.incident_id} className="font-mono text-xs text-text">
+                      {match.incident_id} · {match.similarity_score.toFixed(2)}
+                    </p>
+                  ))}
+                </div>
+              ) : null}
             </div>
           ) : (
             <p className="text-sm text-muted">Select an incident from the inbox or process a new failure.</p>
@@ -931,11 +1168,13 @@ function RuntimeView({
 function SettingsView({
   health,
   seed,
-  sourceCounts
+  sourceCounts,
+  summary
 }: {
   health: Record<string, string | boolean> | null
   seed: SeedResponse | null
   sourceCounts: Array<[string, number]>
+  summary: RuntimeSummary | null
 }) {
   return (
     <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
@@ -946,6 +1185,8 @@ function SettingsView({
           <Metric label="Storage" value={String(health?.storage ?? 'embedded')} mono />
           <Metric label="Cognee mode" value={health?.cognee_enabled ? 'Live Cognee' : 'Adapter mode'} tone={health?.cognee_enabled ? 'success' : 'warning'} mono />
           <Metric label="Dataset" value={seed?.dataset ?? 'airmemory'} mono />
+          <Metric label="Queue mode" value={summary?.queue_mode ?? 'pending'} mono />
+          <Metric label="Wiki dir" value={summary?.wiki_dir ?? 'pending'} mono />
         </MetricGrid>
       </Panel>
 
@@ -967,10 +1208,48 @@ function SettingsView({
   )
 }
 
+function IncidentInbox({
+  incidentIds,
+  onSelect,
+  selectedIncidentId
+}: {
+  incidentIds: string[]
+  onSelect: (incidentId: string) => void
+  selectedIncidentId: string | null
+}) {
+  if (!incidentIds.length) {
+    return <p className="text-sm text-muted">No runtime incidents yet. Emit and process a demo failure to populate the inbox.</p>
+  }
+
+  return (
+    <div className="grid gap-2">
+      {incidentIds.map((incidentId) => {
+        const selected = incidentId === selectedIncidentId
+        return (
+          <button
+            key={incidentId}
+            type="button"
+            className={
+              selected
+                ? 'flex min-h-11 items-center justify-between gap-3 rounded-control border border-accent/40 bg-accent-soft px-3 py-2 text-left text-sm'
+                : 'flex min-h-11 items-center justify-between gap-3 rounded-control border border-border bg-panel px-3 py-2 text-left text-sm hover:bg-surface2'
+            }
+            onClick={() => onSelect(incidentId)}
+            aria-current={selected ? 'true' : undefined}
+          >
+            <span className="min-w-0 truncate font-mono text-text">{incidentId}</span>
+            <ChevronRight size={16} className="shrink-0 text-muted" />
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 function Panel({ action, children, icon, title }: { action?: ReactNode; children: ReactNode; icon: ReactNode; title: string }) {
   return (
-    <section className="min-w-0 rounded-[6px] border border-border bg-panel p-5">
-      <div className="mb-4 flex items-center justify-between gap-3 border-b border-border pb-3">
+    <section className="premium-card min-w-0 p-5">
+      <div className="mb-4 flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           <span className="text-muted">{icon}</span>
           <h3 className="truncate text-sm font-semibold text-text">{title}</h3>
@@ -1001,7 +1280,7 @@ function Metric({
     <div className="grid gap-1 border-b border-border py-2 last:border-b-0 sm:grid-cols-[136px_minmax(0,1fr)] sm:gap-4">
       <dt className="text-xs font-medium text-muted">{label}</dt>
       <dd className={`${mono ? 'font-mono' : ''} min-w-0 text-sm leading-6 ${toneTextClass(tone)}`}>
-        <span className="block overflow-x-auto whitespace-nowrap pb-1">{value}</span>
+        <span className="block truncate" title={value}>{value}</span>
       </dd>
     </div>
   )
@@ -1087,25 +1366,6 @@ function CitationLedger({ citations, compact = false }: { citations: Citation[];
   )
 }
 
-function ResolutionHighlight({ accepted, topResolution }: { accepted?: ResolutionRank; topResolution?: ResolutionRank }) {
-  const rank = accepted ?? topResolution
-
-  if (!rank) {
-    return <p className="text-sm text-muted">Run recall to populate resolution ranking.</p>
-  }
-
-  return (
-    <div>
-      <div className="flex items-center justify-between gap-3">
-        <StatusPill tone={rank.status === 'deprecated' ? 'danger' : 'success'}>#{rank.rank}</StatusPill>
-        <span className="font-mono text-sm text-muted">{rank.score.toFixed(2)}</span>
-      </div>
-      <p className="mt-4 text-lg font-semibold leading-7 text-text">{rank.title}</p>
-      <p className="mt-2 text-sm text-muted">Status: {rank.status}</p>
-    </div>
-  )
-}
-
 function ResolutionList({ compact = false, ranks }: { compact?: boolean; ranks: ResolutionRank[] }) {
   if (!ranks.length) {
     return <p className="text-sm text-muted">Run recall to populate resolution ranks.</p>
@@ -1118,9 +1378,9 @@ function ResolutionList({ compact = false, ranks }: { compact?: boolean; ranks: 
           <span className={rank.rank === 1 ? 'font-mono text-sm text-text' : 'font-mono text-sm text-muted'}>#{rank.rank}</span>
           <div className="min-w-0">
             <p className={`${compact ? 'text-sm' : 'text-base'} leading-6 text-text`}>{rank.title}</p>
-            <p className="mt-1 overflow-x-auto whitespace-nowrap font-mono text-[11px] text-muted">{rank.id}</p>
+            <p className="mt-1 truncate font-mono text-[11px] text-muted" title={rank.id}>{rank.id}</p>
           </div>
-          <span className={`w-fit rounded-full border px-2 py-0.5 text-xs font-medium ${rank.status === 'deprecated' ? 'border-danger/20 bg-red-50 text-danger' : 'border-success/20 bg-emerald-50 text-success'}`}>
+          <span className={`w-fit rounded-full border px-2 py-0.5 text-xs font-medium ${rank.status === 'deprecated' ? 'border-danger/30 bg-danger/10 text-danger' : 'border-success/30 bg-success/10 text-success'}`}>
             {rank.status}
           </span>
         </div>
@@ -1129,19 +1389,11 @@ function ResolutionList({ compact = false, ranks }: { compact?: boolean; ranks: 
   )
 }
 
-function RunbookPreview({ runbook }: { runbook: RunbookState | null }) {
-  return (
-    <pre className="max-h-[360px] min-w-0 overflow-auto whitespace-pre-wrap break-words rounded-[6px] border border-border bg-bg p-3 font-mono text-xs leading-6 text-text">
-      {runbook?.markdown ?? 'Runbook pending.'}
-    </pre>
-  )
-}
-
 function PathSummary({ contrast, graph }: { contrast?: string | null; graph: GraphPath | null }) {
   return (
     <div className="mt-4 grid gap-2">
       <p className="text-sm leading-6 text-muted">{graph?.explanation ?? 'Lineage graph pending.'}</p>
-      {contrast ? <p className="rounded-[6px] border border-border bg-bg p-3 text-sm leading-6 text-muted">{contrast}</p> : null}
+      {contrast ? <p className="rounded-control border border-border bg-bg p-3 text-sm leading-6 text-muted">{contrast}</p> : null}
     </div>
   )
 }
@@ -1156,7 +1408,7 @@ function PathList({ graph }: { graph: GraphPath | null }) {
       {graph.edges.map((edge) => (
         <div key={edge.id} className="border-b border-border py-2 last:border-b-0">
           <p className={edge.active ? 'font-mono text-xs text-text' : 'font-mono text-xs text-muted'}>{edge.label}</p>
-          <p className="mt-1 overflow-x-auto whitespace-nowrap font-mono text-[11px] text-text">
+          <p className="mt-1 break-all font-mono text-[11px] text-text">
             {edge.source} {'->'} {edge.target}
           </p>
         </div>
@@ -1255,31 +1507,20 @@ function toneTextClass(tone: 'default' | 'success' | 'warning' | 'danger' | 'mut
   return 'text-text'
 }
 
-function toneDotClass(tone: string) {
-  if (tone === 'success') return 'h-1.5 w-1.5 rounded-full bg-success'
-  if (tone === 'warning') return 'h-1.5 w-1.5 rounded-full bg-warning'
-  if (tone === 'danger') return 'h-1.5 w-1.5 rounded-full bg-danger'
-  if (tone === 'info') return 'h-1.5 w-1.5 rounded-full bg-zinc-400'
-  return 'h-1.5 w-1.5 rounded-full bg-zinc-300'
-}
 
 function buttonToneClass(tone: 'primary' | 'secondary' | 'danger') {
-  if (tone === 'danger') return 'border-danger/20 bg-red-50 text-danger hover:bg-red-100'
-  if (tone === 'secondary') return 'border-border bg-panel text-text hover:bg-surface2'
-  return 'border-text bg-text text-panel hover:bg-zinc-700'
+  if (tone === 'danger') return 'border-danger/25 bg-danger/10 text-danger hover:bg-danger/15'
+  if (tone === 'secondary') return 'border-border bg-transparent text-text hover:bg-surface'
+  return 'border-transparent bg-accent text-white hover:bg-accent-strong'
 }
 
 function pillToneClass(tone: 'success' | 'warning' | 'danger') {
-  if (tone === 'success') return 'border-success/20 bg-emerald-50 text-success'
-  if (tone === 'danger') return 'border-danger/20 bg-red-50 text-danger'
-  return 'border-warning/20 bg-amber-50 text-warning'
+  if (tone === 'success') return 'border-success/30 bg-success/10 text-success'
+  if (tone === 'danger') return 'border-danger/30 bg-danger/10 text-danger'
+  return 'border-warning/30 bg-warning/10 text-warning'
 }
 
 function pct(value: number) {
   return `${Math.round(value * 100)}%`
 }
 
-function formatDelta(value: number) {
-  const rounded = Math.round(value * 100)
-  return `${rounded >= 0 ? '+' : ''}${rounded} pts`
-}

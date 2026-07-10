@@ -22,6 +22,7 @@
 
 ## Recent Incidents
 
+- [INC-1029 — Row count mismatch](incidents/inc_1029.md)
 - [inc_2026_07_01_customer_daily_revenue_dag_transform_revenue_missing_partition](incidents/inc_2026_07_01_customer_daily_revenue_dag_transform_revenue_missing_partition.md)
 
 ## Runbooks

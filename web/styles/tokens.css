@@ -1,20 +1,50 @@
 :root {
-  --bg: #fafafa;
-  --panel: #ffffff;
-  --surface: #ffffff;
-  --surface-2: #f4f4f5;
-  --accent: #18181b;
-  --success: #168a5b;
-  --warning: #b45309;
-  --danger: #d92d20;
-  --text: #18181b;
-  --text-muted: #71717a;
-  --border: #e4e4e7;
-  --graph-pipeline: #27272a;
-  --graph-task: #71717a;
-  --graph-table: #168a5b;
-  --graph-incident: #d92d20;
-  --graph-resolution: #2563eb;
-  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI";
-  --font-mono: "SFMono-Regular";
+  /* Near-black canvas — Vercel / Linear / Resend */
+  --bg: #050505;
+  --bg-elevated: #0a0a0a;
+  --panel: #0c0c0c;
+  --surface: #111111;
+  --surface-2: #171717;
+  --surface-3: #262626;
+  --sidebar: #050505;
+
+  /* Single premium accent */
+  --accent: #3b82f6;
+  --accent-soft: rgba(59, 130, 246, 0.12);
+  --accent-strong: #60a5fa;
+  --accent-muted: rgba(59, 130, 246, 0.08);
+
+  /* Status — used sparingly */
+  --success: #34d399;
+  --warning: #fbbf24;
+  --danger: #f87171;
+
+  /* Type */
+  --text: #ededed;
+  --text-muted: #8a8a8a;
+  --text-faint: #525252;
+
+  /* Borders — hairline, not chrome */
+  --border: rgba(255, 255, 255, 0.06);
+  --border-strong: rgba(255, 255, 255, 0.1);
+  --ring: rgba(59, 130, 246, 0.45);
+
+  /* Charts & graph — limited palette */
+  --chart-1: #3b82f6;
+  --chart-2: #34d399;
+  --chart-3: #a3a3a3;
+  --chart-4: #525252;
+  --graph-pipeline: #e5e5e5;
+  --graph-task: #a3a3a3;
+  --graph-table: #34d399;
+  --graph-incident: #f87171;
+  --graph-resolution: #60a5fa;
+
+  --font-sans: var(--font-jakarta), "Segoe UI", sans-serif;
+  --font-mono: var(--font-jetbrains), "SFMono-Regular", ui-monospace, monospace;
+
+  --radius: 10px;
+  --radius-sm: 6px;
+  --glow: 0 0 0 1px rgba(255, 255, 255, 0.04), 0 24px 48px rgba(0, 0, 0, 0.55);
+  --card-shine: linear-gradient(180deg, rgba(255, 255, 255, 0.03) 0%, transparent 48%);
 }
