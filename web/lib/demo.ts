@@ -337,9 +337,15 @@ export async function demoHealth() {
   }
 }
 
-export async function demoSeed(): Promise<SeedResponse> {
-  await delay()
-  return {
+/** Sync snapshots for first paint in demo mode (no empty dashes on Vercel). */
+export const DEMO_BOOTSTRAP = {
+  health: {
+    status: 'ok',
+    mode: 'demo',
+    cognee_enabled: false,
+    message: 'Running with local demo data'
+  } as Record<string, string | boolean>,
+  seed: {
     remembered: 10,
     counts_by_source: {
       dag: 1,
@@ -352,7 +358,34 @@ export async function demoSeed(): Promise<SeedResponse> {
     },
     dataset: 'airmemory_demo',
     cognee_enabled: false
-  }
+  } satisfies SeedResponse,
+  summary: {
+    queue_mode: 'demo',
+    wiki_dir: './wiki',
+    state_dir: './.airmemory_state',
+    incident_count: 2,
+    latest_incident_id: 'INC-DEMO-1041',
+    latest_summary: 'ROW_COUNT_MISMATCH on validate_row_counts'
+  } satisfies RuntimeSummary,
+  incidentIds: ['INC-DEMO-1041', 'INC-1029'] as string[],
+  detail: () => runtimeDetail('INC-DEMO-1041'),
+  recall: (): RecallResponse => ({
+    answer: [
+      'Yes — this matches INC-1029 on customer_daily_migration_dag / validate_row_counts.',
+      'Root cause: exact `processing_date = system_date` missed late HANA records.',
+      'Safe fix: widen the window to `system_date - 3` through `system_date + 3`, then rerun `validate_row_counts` and `dq_reconciliation_check` only.'
+    ].join(' '),
+    citations: DEMO_CITATIONS,
+    resolutions: baseResolutions(false, false),
+    graph_path: DEMO_GRAPH,
+    vector_only_contrast: null
+  }),
+  graph: DEMO_GRAPH
+}
+
+export async function demoSeed(): Promise<SeedResponse> {
+  await delay()
+  return DEMO_BOOTSTRAP.seed
 }
 
 export async function demoRecall(question: string): Promise<RecallResponse> {
@@ -458,12 +491,9 @@ export async function demoGraph(): Promise<GraphPath> {
 export async function demoRuntimeSummary(): Promise<RuntimeSummary> {
   await delay(120)
   return {
-    queue_mode: 'demo',
-    wiki_dir: './wiki',
-    state_dir: './.airmemory_state',
+    ...DEMO_BOOTSTRAP.summary,
     incident_count: state.incidentIds.length,
-    latest_incident_id: state.incidentIds[0],
-    latest_summary: 'ROW_COUNT_MISMATCH on validate_row_counts'
+    latest_incident_id: state.incidentIds[0]
   }
 }
 

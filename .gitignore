@@ -15,6 +15,9 @@ web/.env.local
 web/tsconfig.tsbuildinfo
 web/.deploy-payload.json
 web/full-deploy.json
+web/.deploy-thin.json
+web/.full-deploy.min.json
+web/.fd-*.txt
 web/.vercel/
 
 dist/

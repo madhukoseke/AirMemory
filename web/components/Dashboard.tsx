@@ -58,6 +58,7 @@ import {
   type RuntimeSummary,
   type SeedResponse
 } from '@/lib/api'
+import { DEMO_BOOTSTRAP } from '@/lib/demo'
 
 const LineageGraph = dynamic(
   () => import('@/components/LineageGraph').then((mod) => mod.LineageGraph),
@@ -148,20 +149,30 @@ export function Dashboard() {
   const [activeView, setActiveView] = useState<ViewId>('home')
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [question, setQuestion] = useState(DEFAULT_QUESTION)
-  const [health, setHealth] = useState<Record<string, string | boolean> | null>(null)
-  const [seed, setSeed] = useState<SeedResponse | null>(null)
-  const [recall, setRecall] = useState<RecallResponse | null>(null)
-  const [graph, setGraph] = useState<GraphPath | null>(null)
+  const [health, setHealth] = useState<Record<string, string | boolean> | null>(() =>
+    isDemoMode ? DEMO_BOOTSTRAP.health : null
+  )
+  const [seed, setSeed] = useState<SeedResponse | null>(() => (isDemoMode ? DEMO_BOOTSTRAP.seed : null))
+  const [recall, setRecall] = useState<RecallResponse | null>(() => (isDemoMode ? DEMO_BOOTSTRAP.recall() : null))
+  const [graph, setGraph] = useState<GraphPath | null>(() => (isDemoMode ? DEMO_BOOTSTRAP.graph : null))
   const [improve, setImprove] = useState<ImproveResponse | null>(null)
   const [forget, setForget] = useState<ForgetResponse | null>(null)
   const [evalResult, setEvalResult] = useState<EvalResponse | null>(null)
-  const [runtimeSummary, setRuntimeSummary] = useState<RuntimeSummary | null>(null)
-  const [runtimeIncidents, setRuntimeIncidents] = useState<string[]>([])
-  const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null)
-  const [runtimeDetail, setRuntimeDetail] = useState<RuntimeIncidentResult | null>(null)
+  const [runtimeSummary, setRuntimeSummary] = useState<RuntimeSummary | null>(() =>
+    isDemoMode ? DEMO_BOOTSTRAP.summary : null
+  )
+  const [runtimeIncidents, setRuntimeIncidents] = useState<string[]>(() =>
+    isDemoMode ? [...DEMO_BOOTSTRAP.incidentIds] : []
+  )
+  const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(() =>
+    isDemoMode ? DEMO_BOOTSTRAP.incidentIds[0] : null
+  )
+  const [runtimeDetail, setRuntimeDetail] = useState<RuntimeIncidentResult | null>(() =>
+    isDemoMode ? DEMO_BOOTSTRAP.detail() : null
+  )
   const [runtimeFormatted, setRuntimeFormatted] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [busyAction, setBusyAction] = useState<BusyAction>('refresh')
+  const [busyAction, setBusyAction] = useState<BusyAction>(isDemoMode ? null : 'refresh')
   const [selectedDocId, setSelectedDocId] = useState(DOCS.find((doc) => doc.kind === 'incident')?.id ?? DOCS[0]?.id ?? 'index.md')
 
   const activeIncident: ActiveIncident = runtimeDetail ? activeFromRuntime(runtimeDetail) : SEED_INCIDENT
@@ -247,7 +258,9 @@ export function Dashboard() {
 
   useEffect(() => {
     void (async () => {
-      setBusyAction('refresh')
+      if (!isDemoMode) {
+        setBusyAction('refresh')
+      }
       try {
         setError(null)
         const [healthResult, seedResult, detail] = await Promise.all([getHealth(), seedAirMemory(), loadRuntime()])
