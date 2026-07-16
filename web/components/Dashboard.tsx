@@ -1190,15 +1190,25 @@ function SettingsView({
   summary: RuntimeSummary | null
 }) {
   return (
-    <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+    <div className="mx-auto grid w-full max-w-3xl min-w-0 gap-4">
       <Panel title="Runtime" icon={<Settings size={17} />}>
         <MetricGrid>
-          <Metric label="Service" value={String(health?.service ?? 'AirMemory')} mono />
-          <Metric label="Backend" value={String(health?.backend ?? 'cognee')} mono />
-          <Metric label="Storage" value={String(health?.storage ?? 'embedded')} mono />
-          <Metric label="Cognee mode" value={health?.cognee_enabled ? 'Live Cognee' : 'Adapter mode'} tone={health?.cognee_enabled ? 'success' : 'warning'} mono />
+          <Metric
+            label="Mode"
+            value={isDemoMode ? 'Demo (client-side)' : 'Live API'}
+            tone={isDemoMode ? 'warning' : 'success'}
+            mono
+          />
+          <Metric label="Service" value={String(health?.service ?? health?.mode ?? 'AirMemory')} mono />
+          <Metric
+            label="Cognee"
+            value={health?.cognee_enabled ? 'Live Cognee' : 'Adapter / demo'}
+            tone={health?.cognee_enabled ? 'success' : 'muted'}
+            mono
+          />
           <Metric label="Dataset" value={seed?.dataset ?? 'airmemory'} mono />
-          <Metric label="Queue mode" value={summary?.queue_mode ?? 'pending'} mono />
+          <Metric label="Queue" value={summary?.queue_mode ?? 'pending'} mono />
+          <Metric label="Docs library" value="web/content/docs" mono />
           <Metric label="Wiki dir" value={summary?.wiki_dir ?? 'pending'} mono />
         </MetricGrid>
       </Panel>
@@ -1207,7 +1217,10 @@ function SettingsView({
         {sourceCounts.length ? (
           <div className="grid gap-2">
             {sourceCounts.map(([source, count]) => (
-              <div key={source} className="flex min-h-11 items-center justify-between gap-3 border-b border-border py-2 text-sm last:border-b-0">
+              <div
+                key={source}
+                className="flex min-h-11 items-center justify-between gap-3 border-b border-border py-2 text-sm last:border-b-0"
+              >
                 <span className="font-mono text-text">{source}</span>
                 <span className="font-mono text-text">{count}</span>
               </div>
@@ -1217,6 +1230,14 @@ function SettingsView({
           <p className="text-sm text-muted">Seed data has not loaded yet.</p>
         )}
       </Panel>
+
+      <section className="premium-card min-w-0 p-5">
+        <h3 className="text-sm font-semibold text-text">Markdown memory</h3>
+        <p className="mt-2 text-sm leading-6 text-muted">
+          Incident write-ups live under <span className="font-mono text-text">content/docs/incidents</span>, with matching
+          runbooks and patterns. Open the Docs view to browse summary, root cause, and fix notes.
+        </p>
+      </section>
     </div>
   )
 }

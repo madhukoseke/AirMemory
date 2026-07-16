@@ -21,7 +21,13 @@
     "id": "index.md",
     "title": "AirMemory docs",
     "kind": "index",
-    "body": "# AirMemory docs\n\nMarkdown memory for incidents, root causes, fixes, and runbooks.\n\n## Incidents\n\n- [INC-1029 \u2014 Row count mismatch](incidents/inc_1029.md)\n- [INC-DEMO-1041 \u2014 Live demo failure](incidents/inc_demo_1041.md)\n- [INC-2026-0701 \u2014 Missing partition](incidents/inc_2026_07_01_missing_partition.md)\n\n## Runbooks\n\n- [row_count_mismatch](runbooks/row_count_mismatch.md)\n- [missing_partition](runbooks/missing_partition.md)\n\n## Failure patterns\n\n- [row_count_mismatch](patterns/row_count_mismatch.md)\n\n## How to add a doc\n\n1. Add a `.md` file under `web/content/docs/{incidents,runbooks,patterns}/`\n2. Register it in `web/lib/docs.ts`\n3. Keep sections useful for on-call: **Summary**, **Root Cause**, **Accepted Fix**, **Rejected Fixes**, **Next Steps**\n"
+    "body": "# AirMemory docs\n\nMarkdown memory for incidents, root causes, fixes, and runbooks.\n\n## Incidents\n\n- [INC-1029 \u2014 Row count mismatch](incidents/inc_1029.md)\n- [INC-DEMO-1041 \u2014 Live demo failure](incidents/inc_demo_1041.md)\n- [INC-2026-0701 \u2014 Missing partition](incidents/inc_2026_07_01_missing_partition.md)\n\n## Runbooks\n\n- [row_count_mismatch](runbooks/row_count_mismatch.md)\n- [missing_partition](runbooks/missing_partition.md)\n\n## Failure patterns\n\n- [row_count_mismatch](patterns/row_count_mismatch.md)\n- [missing_partition](patterns/missing_partition.md)\n\n## How to add a doc\n\n1. Add a `.md` file under `web/content/docs/{incidents,runbooks,patterns}/`\n2. Register it in `web/lib/docs.ts`\n3. Keep sections useful for on-call: **Summary**, **Root Cause**, **Accepted Fix**, **Rejected Fixes**, **Next Steps**\n"
+  },
+  {
+    "id": "patterns/missing_partition.md",
+    "title": "Pattern \u2014 missing_partition",
+    "kind": "pattern",
+    "body": "# Pattern \u2014 missing_partition\n\n## Description\n\nA required source partition is absent when a transform or load starts. Common on daily warehouse DAGs that assume yesterday\u2019s partition already landed.\n\n## Common root causes\n\n- Upstream load delayed or failed\n- DAG schedule starts before source completion\n- Wrong processing-date partition requested\n\n## Best known fix\n\nConfirm or backfill the missing partition, then rerun from the failed task only.\n\n## Rejected approaches\n\n- Increasing retries without checking partition existence\n- Skipping partition sensors\n\n## Canonical incident\n\n[INC-2026-0701](../incidents/inc_2026_07_01_missing_partition.md)\n\n## Prevention\n\nAdd an upstream partition / completion-marker sensor before the transform.\n"
   },
   {
     "id": "patterns/row_count_mismatch.md",

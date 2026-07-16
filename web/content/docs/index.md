@@ -16,6 +16,7 @@ Markdown memory for incidents, root causes, fixes, and runbooks.
 ## Failure patterns
 
 - [row_count_mismatch](patterns/row_count_mismatch.md)
+- [missing_partition](patterns/missing_partition.md)
 
 ## How to add a doc
 
