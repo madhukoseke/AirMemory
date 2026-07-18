@@ -10,7 +10,7 @@ def categorize_failure(error_message: str) -> str:
     if ("schema" in msg or "column" in msg) and ("expected" in msg or "type" in msg or "received" in msg):
         return "schema_drift"
 
-    if "row count" in msg or "count mismatch" in msg:
+    if "row count" in msg or "count mismatch" in msg or "row_count_mismatch" in msg:
         return "row_count_mismatch"
 
     if "timeout" in msg or "timed out" in msg:

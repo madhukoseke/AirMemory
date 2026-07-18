@@ -10,6 +10,7 @@ from app.memory import MemoryEngine
 from app.recall import recall_memory
 from app.runbook import generate_runbook
 from app.runtime import (
+    analyze_log_text,
     emit_demo_failure,
     fetch_runtime_incident,
     format_runtime_process_output,
@@ -28,6 +29,8 @@ from app.schema import (
     RecallResponse,
     RunbookRequest,
     RunbookResponse,
+    RuntimeAnalyzeRequest,
+    RuntimeAnalyzeResponse,
     RuntimeEmitResponse,
     RuntimeIncidentList,
     RuntimeProcessResponse,
@@ -134,3 +137,21 @@ async def runtime_process() -> RuntimeProcessResponse:
         result=result,
         formatted=format_runtime_process_output(result),
     )
+
+
+@app.post("/runtime/analyze", response_model=RuntimeAnalyzeResponse)
+async def runtime_analyze(request: RuntimeAnalyzeRequest) -> RuntimeAnalyzeResponse:
+    from fastapi import HTTPException
+
+    if not request.log_text or not request.log_text.strip():
+        raise HTTPException(status_code=400, detail="log_text is required")
+    try:
+        payload = await analyze_log_text(
+            request.log_text,
+            dag_id=request.dag_id,
+            task_id=request.task_id,
+            run_id=request.run_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return RuntimeAnalyzeResponse.model_validate(payload)

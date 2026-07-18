@@ -15,7 +15,6 @@ import {
   Database,
   FileText,
   GitBranch,
-  Home,
   LayoutDashboard,
   Menu,
   Play,
@@ -31,6 +30,7 @@ import {
 import type { ComponentType, ReactNode } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
+  analyzeRuntimeLog,
   buildRecallQuestion,
   buildRunbookContext,
   emitRuntimeFailure,
@@ -111,18 +111,17 @@ type NavItem = {
   icon: IconType
 }
 
-type BusyAction = 'refresh' | 'recall' | 'lineage' | 'runtime' | 'improve' | 'forget' | 'eval' | null
+type BusyAction = 'refresh' | 'recall' | 'lineage' | 'runtime' | 'analyze' | 'improve' | 'forget' | 'eval' | null
 
 const PRIMARY_NAV: NavItem[] = [
-  { id: 'home', label: 'Dashboard', description: '', icon: Home },
+  { id: 'home', label: 'Analyze', description: '', icon: Search },
   { id: 'overview', label: 'Incident', description: '', icon: LayoutDashboard },
-  { id: 'recall', label: 'Recall', description: '', icon: Brain },
+  { id: 'recall', label: 'Memory', description: '', icon: Brain },
   { id: 'lineage', label: 'Lineage', description: '', icon: GitBranch },
   { id: 'docs', label: 'Docs', description: '', icon: BookOpen }
 ]
 
 const TOOL_NAV: NavItem[] = [
-  { id: 'runtime', label: 'Runtime', description: '', icon: Zap },
   { id: 'improve', label: 'Improve', description: '', icon: ThumbsUp },
   { id: 'forget', label: 'Forget', description: '', icon: Trash2 },
   { id: 'evals', label: 'Evals', description: '', icon: BarChart3 },
@@ -149,6 +148,7 @@ export function Dashboard() {
   const [activeView, setActiveView] = useState<ViewId>('home')
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [question, setQuestion] = useState(DEFAULT_QUESTION)
+  const [logText, setLogText] = useState('')
   const [health, setHealth] = useState<Record<string, string | boolean> | null>(() =>
     isDemoMode ? DEMO_BOOTSTRAP.health : null
   )
@@ -363,6 +363,26 @@ export function Dashboard() {
     })
   }
 
+  function analyzePastedLog() {
+    if (!logText.trim()) return
+    setActiveView('home')
+    void runAction('analyze', async () => {
+      const analyzed = await analyzeRuntimeLog({ logText })
+      setRuntimeFormatted(analyzed.formatted)
+      const nextId = analyzed.result?.incident.incident_id ?? null
+      const detail = await loadRuntime(nextId)
+      if (detail) {
+        await syncMemoryForIncident(detail)
+        setActiveView('overview')
+      } else if (analyzed.result) {
+        setRuntimeDetail(analyzed.result)
+        setSelectedIncidentId(analyzed.result.incident.incident_id)
+        await syncMemoryForIncident(analyzed.result)
+        setActiveView('overview')
+      }
+    })
+  }
+
   function selectRuntimeIncident(incidentId: string) {
     void runAction('runtime', async () => {
       setSelectedIncidentId(incidentId)
@@ -410,11 +430,13 @@ export function Dashboard() {
               <HomeDashboard
                 activeIncident={activeIncident}
                 isBusy={isBusy}
-                recall={recall}
+                logText={logText}
                 runtimeDetail={runtimeDetail}
                 seed={seed}
                 summary={runtimeSummary}
                 onEmitAndProcess={emitAndProcessRuntime}
+                onLogTextChange={setLogText}
+                onAnalyze={analyzePastedLog}
                 onOpenLineage={askDownstream}
                 onOpenOverview={() => switchView('overview')}
                 onOpenRecall={askCurrent}
@@ -532,8 +554,8 @@ function ControlNav({
           <NavButton key={item.id} item={item} active={activeView === item.id} onSelect={onSelect} />
         ))}
       </nav>
-      <p className="mb-2 mt-10 px-2 text-[10px] font-medium uppercase tracking-[0.16em] text-muted">Tools</p>
-      <nav aria-label="Tools" className="grid gap-0.5">
+      <p className="mb-2 mt-10 px-2 text-[10px] font-medium uppercase tracking-[0.16em] text-muted">Advanced</p>
+      <nav aria-label="Advanced" className="grid gap-0.5">
         {TOOL_NAV.map((item) => (
           <NavButton key={item.id} item={item} active={activeView === item.id} onSelect={onSelect} />
         ))}
@@ -575,8 +597,8 @@ function MobileNav({
             <NavButton key={item.id} item={item} active={activeView === item.id} onSelect={onSelect} />
           ))}
         </nav>
-        <p className="mb-2 mt-6 px-2 text-[10px] font-medium uppercase tracking-[0.14em] text-muted">Tools</p>
-        <nav aria-label="Mobile tools" className="grid gap-0.5">
+        <p className="mb-2 mt-6 px-2 text-[10px] font-medium uppercase tracking-[0.14em] text-muted">Advanced</p>
+        <nav aria-label="Mobile advanced" className="grid gap-0.5">
           {TOOL_NAV.map((item) => (
             <NavButton key={item.id} item={item} active={activeView === item.id} onSelect={onSelect} />
           ))}

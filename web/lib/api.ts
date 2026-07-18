@@ -1,4 +1,5 @@
 import {
+  demoAnalyze,
   demoEmit,
   demoEval,
   demoForget,
@@ -147,6 +148,33 @@ export type RuntimeIncidentResult = {
   }>
   wiki_paths: string[]
   cognee_recall_text?: string | null
+}
+
+export type RuntimeAnalyzeParsed = {
+  dag_id: string
+  task_id: string
+  run_id: string
+  execution_date: string
+  error_message: string
+  stack_trace?: string | null
+  source_tables: string[]
+  target_tables: string[]
+  log_chars: number
+  log_preview: string
+}
+
+export type RuntimeAnalyzeResponse = {
+  processed: boolean
+  parsed: RuntimeAnalyzeParsed
+  result: RuntimeIncidentResult | null
+  formatted: string
+}
+
+export type AnalyzeLogInput = {
+  logText: string
+  dagId?: string
+  taskId?: string
+  runId?: string
 }
 
 export type RecallContext = {
@@ -336,4 +364,18 @@ export function processRuntimeFailure() {
     '/runtime/process',
     { method: 'POST', body: '{}' }
   ).catch(() => demoProcess())
+}
+
+export function analyzeRuntimeLog(input: AnalyzeLogInput) {
+  const payload = {
+    log_text: input.logText,
+    dag_id: input.dagId,
+    task_id: input.taskId,
+    run_id: input.runId
+  }
+  if (isDemoMode) return demoAnalyze(input.logText)
+  return apiRequest<RuntimeAnalyzeResponse>('/runtime/analyze', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  }).catch(() => demoAnalyze(input.logText))
 }

@@ -273,57 +273,87 @@ const state: DemoState = {
   incidentIds: ['INC-DEMO-1041', 'INC-1029']
 }
 
-function runtimeDetail(incidentId: string): RuntimeIncidentResult {
-  const isLive = incidentId.startsWith('INC-DEMO')
+function runtimeDetail(
+  incidentId: string,
+  overrides?: {
+    dagId?: string
+    taskId?: string
+    category?: string
+    rawError?: string
+  }
+): RuntimeIncidentResult {
+  const isPartition = overrides?.category === 'missing_partition'
   return {
     incident: {
       incident_id: incidentId,
-      dag_id: 'customer_daily_migration_dag',
-      task_id: isLive ? 'validate_row_counts' : 'validate_row_counts',
-      failure_category: 'row_count_mismatch',
-      raw_error: 'ROW_COUNT_MISMATCH: HANA 1588 / BigQuery 1297 / diff 291',
-      normalized_error: 'row_count_mismatch',
-      source_tables: ['hana.customer_master'],
-      target_tables: ['bq.prod.customer_master'],
-      recommended_fix: 'Widen processing_date window to system_date ± 3 days',
-      likely_root_cause: 'Exact processing_date filter missed late-arriving HANA records.',
+      dag_id: overrides?.dagId ?? (isPartition ? 'customer_daily_revenue_dag' : 'customer_daily_migration_dag'),
+      task_id: overrides?.taskId ?? (isPartition ? 'transform_revenue' : 'validate_row_counts'),
+      failure_category: overrides?.category ?? 'row_count_mismatch',
+      raw_error:
+        overrides?.rawError ??
+        (isPartition
+          ? 'BigQuery error: partition not found in raw.customer_transactions'
+          : 'ROW_COUNT_MISMATCH: HANA 1588 / BigQuery 1297 / diff 291'),
+      normalized_error: overrides?.category ?? 'row_count_mismatch',
+      source_tables: isPartition ? ['raw.customer_transactions'] : ['hana.customer_master'],
+      target_tables: isPartition ? ['mart.customer_daily_revenue'] : ['bq.prod.customer_master'],
+      recommended_fix: isPartition
+        ? 'Backfill the missing partition, then rerun transform_revenue only'
+        : 'Widen processing_date window to system_date ± 3 days',
+      likely_root_cause: isPartition
+        ? 'Upstream extract did not land the expected partition before transform.'
+        : 'Exact processing_date filter missed late-arriving HANA records.',
       rejected_fix_warning: state.forgotten ? null : 'Avoid full DAG clear — previously rejected.'
     },
     advice: {
-      summary: 'Matched INC-1029 via lineage from customer_metrics → customer_master.',
-      likely_root_cause:
-        'Exact `processing_date = system_date` validation missed late HANA records that arrived after cutover.',
-      recommended_fix:
-        'Widen the validation window to `system_date - 3` through `system_date + 3`, then rerun `validate_row_counts` and `dq_reconciliation_check` only.',
+      summary: isPartition
+        ? 'Matched prior missing_partition incidents on revenue transform.'
+        : 'Matched INC-1029 via lineage from customer_metrics → customer_master.',
+      likely_root_cause: isPartition
+        ? 'The expected daily partition was missing from the upstream raw table when transform_revenue ran.'
+        : 'Exact `processing_date = system_date` validation missed late HANA records that arrived after cutover.',
+      recommended_fix: isPartition
+        ? 'Confirm upstream extract completed, backfill the missing partition, then rerun `transform_revenue` only.'
+        : 'Widen the validation window to `system_date - 3` through `system_date + 3`, then rerun `validate_row_counts` and `dq_reconciliation_check` only.',
       rejected_fix_warning: state.forgotten
         ? null
         : 'Do not clear/reload the full DAG — that workaround was deprecated after INC-1029.',
       confidence: state.improved ? 0.91 : 0.78,
-      recommended_next_steps: [
-        'Apply ±3 day processing_date window',
-        'Rerun validate_row_counts only',
-        'Confirm Looker customer_metrics freshness'
-      ]
+      recommended_next_steps: isPartition
+        ? ['Verify upstream extract status', 'Backfill missing partition', 'Rerun transform_revenue only']
+        : [
+            'Apply ±3 day processing_date window',
+            'Rerun validate_row_counts only',
+            'Confirm Looker customer_metrics freshness'
+          ]
     },
     similar_incidents: [
       {
-        incident_id: 'INC-1029',
+        incident_id: isPartition ? 'INC-980' : 'INC-1029',
         similarity_score: 0.93,
-        reason: 'Same failure category and upstream table via lineage',
+        reason: isPartition
+          ? 'Same missing_partition fingerprint on revenue DAG'
+          : 'Same failure category and upstream table via lineage',
         historical_incident: {
-          incident_id: 'INC-1029',
-          accepted_fix: 'Widen processing_date window to system_date ± 3 days',
-          root_cause: 'Exact date filter missed late source records',
+          incident_id: isPartition ? 'INC-980' : 'INC-1029',
+          accepted_fix: isPartition
+            ? 'Backfill partition then rerun transform'
+            : 'Widen processing_date window to system_date ± 3 days',
+          root_cause: isPartition ? 'Missing upstream partition' : 'Exact date filter missed late source records',
           rejected_fixes: ['Full DAG clear and reload']
         }
       }
     ],
-    wiki_paths: [
-      'content/docs/incidents/inc_1029.md',
-      'content/docs/runbooks/row_count_mismatch.md',
-      'content/docs/patterns/row_count_mismatch.md'
-    ],
-    cognee_recall_text: 'Demo memory recall for INC-1029 row-count mismatch.'
+    wiki_paths: isPartition
+      ? ['content/docs/runbooks/missing_partition.md', 'content/docs/patterns/missing_partition.md']
+      : [
+          'content/docs/incidents/inc_1029.md',
+          'content/docs/runbooks/row_count_mismatch.md',
+          'content/docs/patterns/row_count_mismatch.md'
+        ],
+    cognee_recall_text: isPartition
+      ? 'Demo memory recall for missing partition failures.'
+      : 'Demo memory recall for INC-1029 row-count mismatch.'
   }
 }
 
@@ -535,6 +565,51 @@ export async function demoProcess() {
       `Task: ${result.incident.task_id}`,
       `Advice: ${result.advice.recommended_fix}`,
       `Confidence: ${Math.round(result.advice.confidence * 100)}%`
+    ].join('\n')
+  }
+}
+
+export async function demoAnalyze(logText: string) {
+  await delay(420)
+  state.emitCount += 1
+  const incidentId = `INC-DEMO-${1041 + state.emitCount}`
+  if (!state.incidentIds.includes(incidentId)) {
+    state.incidentIds = [incidentId, ...state.incidentIds]
+  }
+
+  const dagMatch = /dag_id\s*[=:]\s*['"]?([A-Za-z0-9_.-]+)/i.exec(logText)
+  const taskMatch = /task_id\s*[=:]\s*['"]?([A-Za-z0-9_.-]+)/i.exec(logText)
+  const lower = logText.toLowerCase()
+  const isPartition = lower.includes('partition') && (lower.includes('not found') || lower.includes('missing'))
+  const result = runtimeDetail(incidentId, {
+    dagId: dagMatch?.[1] ?? (isPartition ? 'customer_daily_revenue_dag' : 'customer_daily_migration_dag'),
+    taskId: taskMatch?.[1] ?? (isPartition ? 'transform_revenue' : 'validate_row_counts'),
+    category: isPartition ? 'missing_partition' : 'row_count_mismatch',
+    rawError: logText.split('\n').find((line) => /error/i.test(line))?.trim() ?? logText.slice(0, 180)
+  })
+
+  return {
+    processed: true,
+    parsed: {
+      dag_id: result.incident.dag_id,
+      task_id: result.incident.task_id,
+      run_id: 'manual__demo',
+      execution_date: '2026-06-30T03:14:08Z',
+      error_message: result.incident.raw_error,
+      stack_trace: null,
+      source_tables: result.incident.source_tables ?? [],
+      target_tables: result.incident.target_tables ?? [],
+      log_chars: logText.length,
+      log_preview: logText.slice(0, 400)
+    },
+    result,
+    formatted: [
+      `## ${incidentId}`,
+      `Parsed from pasted log`,
+      `DAG: ${result.incident.dag_id}`,
+      `Task: ${result.incident.task_id}`,
+      `Category: ${result.incident.failure_category}`,
+      `Advice: ${result.advice.recommended_fix}`
     ].join('\n')
   }
 }

@@ -153,3 +153,17 @@ class RuntimeProcessResponse(BaseModel):
     result: dict[str, object] | None = None
     formatted: str
 
+
+class RuntimeAnalyzeRequest(BaseModel):
+    log_text: str
+    dag_id: str | None = None
+    task_id: str | None = None
+    run_id: str | None = None
+
+
+class RuntimeAnalyzeResponse(BaseModel):
+    processed: bool
+    parsed: dict[str, object]
+    result: dict[str, object] | None = None
+    formatted: str
+

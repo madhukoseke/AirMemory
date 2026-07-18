@@ -4,6 +4,8 @@ from typing import Any
 
 from airmemory.config import settings
 from airmemory.ingestion.demo_emitters import build_demo_failure_event
+from airmemory.ingestion.log_parser import build_event_from_log
+from airmemory.processing.incident_pipeline import process_failure_event
 from airmemory.processing.worker import format_worker_result, run_worker_once
 from airmemory.redis_client import RedisClient
 
@@ -32,6 +34,31 @@ async def process_next_failure() -> dict[str, Any] | None:
     if result is None:
         return None
     return result.model_dump(mode="json")
+
+
+async def analyze_log_text(
+    log_text: str,
+    *,
+    dag_id: str | None = None,
+    task_id: str | None = None,
+    run_id: str | None = None,
+) -> dict[str, Any]:
+    """Parse a pasted/uploaded Airflow log and run the incident pipeline immediately."""
+    event, parsed = build_event_from_log(
+        log_text,
+        dag_id=dag_id,
+        task_id=task_id,
+        run_id=run_id,
+    )
+    result = await process_failure_event(event)
+    payload = result.model_dump(mode="json")
+    RedisClient().save_result(result.incident.incident_id, payload)
+    return {
+        "processed": True,
+        "parsed": parsed,
+        "result": payload,
+        "formatted": format_worker_result(result),
+    }
 
 
 def runtime_summary() -> dict[str, Any]:
